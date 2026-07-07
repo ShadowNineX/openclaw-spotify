@@ -4,11 +4,19 @@
   "description": "Spotify integration plugin for OpenClaw",
   "type": "module",
   "private": true,
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
   "exports": {
-    ".": "./index.ts"
+    ".": "./dist/index.js"
   },
   "scripts": {
+    "build": "bun build ./index.ts --outdir ./dist --target bun --format esm --external openclaw --external typebox --external @spotify/web-api-ts-sdk",
     "check": "tsc --noEmit",
+    "plugin:build": "bun run build && openclaw plugins build --root . --entry ./dist/index.js",
+    "plugin:validate": "bun run build && openclaw plugins validate --root . --entry ./dist/index.js",
     "test": "vitest run"
   },
   "devDependencies": {
@@ -27,7 +35,7 @@
   },
   "openclaw": {
     "extensions": [
-      "./index.ts"
+      "./dist/index.js"
     ],
     "compat": {
       "pluginApi": ">=2026.6.11",
