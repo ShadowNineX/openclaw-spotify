@@ -19,7 +19,16 @@ export function defineCreatePlaylistTool(tool: SpotifyToolFactory): SpotifyTool 
         collaborative,
       });
 
-      return summarizePlaylist(playlist);
+      await client.playlists.changeDetails(playlist.id, {
+        public: isPublic,
+        collaborative,
+      });
+
+      return summarizePlaylist({
+        ...playlist,
+        public: isPublic,
+        collaborative,
+      });
     },
   });
 }
