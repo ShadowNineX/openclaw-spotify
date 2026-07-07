@@ -226,6 +226,7 @@ describe("Spotify tool plugin metadata", () => {
   it("sends private playlist creation as an explicit boolean false", async () => {
     const originalFetch = globalThis.fetch;
     let createPlaylistBody: unknown;
+    let changeDetailsBody: unknown;
     const createPlaylistTool = defineCreatePlaylistTool(
       ((definition: unknown) => definition) as never,
     ) as unknown as {
@@ -301,6 +302,13 @@ describe("Spotify tool plugin metadata", () => {
         );
       }
 
+      if (href === "https://api.spotify.com/v1/playlists/private-1") {
+        expect(init?.method).toBe("PUT");
+        changeDetailsBody = JSON.parse(String(init?.body));
+
+        return new Response(null, { status: 200 });
+      }
+
       return new Response("Unexpected test request", { status: 404 });
     }) as typeof fetch;
 
@@ -329,6 +337,10 @@ describe("Spotify tool plugin metadata", () => {
     expect(createPlaylistBody).toMatchObject({
       name: "Private test",
       description: "Hidden from profile",
+      public: false,
+      collaborative: false,
+    });
+    expect(changeDetailsBody).toMatchObject({
       public: false,
       collaborative: false,
     });
