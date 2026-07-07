@@ -58,4 +58,40 @@ describe("Spotify tool plugin metadata", () => {
       },
     });
   });
+
+  it("keeps playback controls discoverable as JSON schema", () => {
+    const metadata = getToolPluginMetadata(entry);
+    const playTool = metadata?.tools.find(
+      (tool) => tool.name === "spotify_play",
+    );
+    const volumeTool = metadata?.tools.find(
+      (tool) => tool.name === "spotify_set_volume",
+    );
+
+    expect(playTool?.parameters).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        contextUri: {
+          type: "string",
+          minLength: 1,
+        },
+        uris: {
+          type: "array",
+          minItems: 1,
+          maxItems: 100,
+        },
+      },
+    });
+    expect(volumeTool?.parameters).toMatchObject({
+      type: "object",
+      properties: {
+        volumePercent: {
+          type: "integer",
+          minimum: 0,
+          maximum: 100,
+        },
+      },
+    });
+  });
 });
