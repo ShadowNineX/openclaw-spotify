@@ -51,7 +51,7 @@
     }
   },
   "dependencies": {
-    "@shadownine/foxify": "^0.1.1",
+    "@shadownine/foxify": "^0.1.2",
     "typebox": "1.3.4"
   }
 }
