@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import entry from "../index";
 import { buildSpotifyToolApproval } from "../src/approval-policy";
+import { defineCreatePlaylistTool } from "../src/tools/create-playlist";
 
 const spotifyToolNames = [
   "spotify_search",
@@ -220,6 +221,117 @@ describe("Spotify tool plugin metadata", () => {
         },
       }),
     ).toBeUndefined();
+  });
+
+  it("sends private playlist creation as an explicit boolean false", async () => {
+    const originalFetch = globalThis.fetch;
+    let createPlaylistBody: unknown;
+    const createPlaylistTool = defineCreatePlaylistTool(
+      ((definition: unknown) => definition) as never,
+    ) as unknown as {
+      execute(
+        params: {
+          collaborative?: boolean;
+          description?: string;
+          name: string;
+          public?: boolean;
+        },
+        config: {
+          clientId: string;
+          clientSecret: string;
+          refreshToken: string;
+        },
+        context: {
+          api?: unknown;
+        },
+      ): Promise<unknown>;
+    };
+
+    globalThis.fetch = (async (url, init) => {
+      const href = url instanceof Request ? url.url : String(url);
+
+      if (href === "https://accounts.spotify.com/api/token") {
+        return new Response(
+          JSON.stringify({
+            access_token: "access-token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (href === "https://api.spotify.com/v1/me/playlists") {
+        createPlaylistBody = JSON.parse(String(init?.body));
+
+        return new Response(
+          JSON.stringify({
+            collaborative: false,
+            description: "Hidden from profile",
+            external_urls: {
+              spotify: "https://open.spotify.com/playlist/private-1",
+            },
+            followers: {
+              total: 0,
+            },
+            href,
+            id: "private-1",
+            images: [],
+            name: "Private test",
+            owner: {
+              display_name: "Me",
+              external_urls: {
+                spotify: "https://open.spotify.com/user/me",
+              },
+              href: "https://api.spotify.com/v1/users/me",
+              id: "me",
+              type: "user",
+              uri: "spotify:user:me",
+            },
+            public: false,
+            snapshot_id: "snapshot-1",
+            tracks: {
+              href: `${href}/private-1/tracks`,
+              total: 0,
+            },
+            type: "playlist",
+            uri: "spotify:playlist:private-1",
+          }),
+          { status: 200 },
+        );
+      }
+
+      return new Response("Unexpected test request", { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      await expect(
+        createPlaylistTool.execute(
+          {
+            name: "Private test",
+            description: "Hidden from profile",
+            public: false,
+          },
+          {
+            clientId: "create-private-client-id",
+            clientSecret: "create-private-client-secret",
+            refreshToken: "create-private-refresh-token",
+          },
+          {},
+        ),
+      ).resolves.toMatchObject({
+        public: false,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(createPlaylistBody).toMatchObject({
+      name: "Private test",
+      description: "Hidden from profile",
+      public: false,
+      collaborative: false,
+    });
   });
 
   it("falls back to playlist IDs when no display name is available", async () => {

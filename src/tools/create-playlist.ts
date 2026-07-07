@@ -10,11 +10,13 @@ export function defineCreatePlaylistTool(tool: SpotifyToolFactory): SpotifyTool 
     parameters: createPlaylistSchema,
     async execute(params, config, context) {
       const client = getSpotifyUserClient(config, context.api);
+      const collaborative = params.collaborative === true;
+      const isPublic = collaborative ? false : params.public === true;
       const playlist = await client.playlists.create({
         name: params.name,
         description: params.description,
-        public: params.public ?? false,
-        collaborative: params.collaborative ?? false,
+        public: isPublic,
+        collaborative,
       });
 
       return summarizePlaylist(playlist);
