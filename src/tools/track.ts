@@ -14,11 +14,10 @@ export function defineTrackTool(tool: SpotifyToolFactory): SpotifyTool {
       "Get Spotify catalog metadata for a track by Spotify track ID.",
     parameters: idSchema,
     async execute(params, config) {
-      const sdk = getSpotifyClient(config);
-      const track = await sdk.tracks.get(
-        params.id,
-        resolveSpotifyMarket(params.market, config),
-      );
+      const client = getSpotifyClient(config);
+      const track = await client.tracks.get(params.id, {
+        market: resolveSpotifyMarket(params.market, config),
+      });
 
       return summarizeTrack(track);
     },

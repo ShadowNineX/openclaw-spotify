@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Queue, Track } from "@spotify/web-api-ts-sdk";
+import type { Queue, Track } from "@shadownine/foxify";
 
 import {
   buildSpotifyAuthorizationUrl,
@@ -298,7 +298,7 @@ describe("Spotify helpers", () => {
     }) as typeof fetch;
 
     try {
-      const sdk = getSpotifyUserClient(
+      const client = getSpotifyUserClient(
         {
           clientId: "client-id",
           clientSecret: "client-secret",
@@ -307,7 +307,7 @@ describe("Spotify helpers", () => {
         api,
       );
 
-      await expect(sdk.currentUser.profile()).resolves.toMatchObject({
+      await expect(client.users.getCurrentProfile()).resolves.toMatchObject({
         id: "me",
       });
     } finally {
@@ -406,7 +406,7 @@ describe("Spotify helpers", () => {
     }) as typeof fetch;
 
     try {
-      const sdk = getSpotifyUserClient(
+      const client = getSpotifyUserClient(
         {
           clientId: "rotating-client-id",
           clientSecret: "rotating-client-secret",
@@ -414,10 +414,10 @@ describe("Spotify helpers", () => {
         api,
       );
 
-      await expect(sdk.currentUser.profile()).resolves.toMatchObject({
+      await expect(client.users.getCurrentProfile()).resolves.toMatchObject({
         id: "me",
       });
-      await expect(sdk.currentUser.profile()).resolves.toMatchObject({
+      await expect(client.users.getCurrentProfile()).resolves.toMatchObject({
         id: "me",
       });
     } finally {
@@ -486,7 +486,13 @@ describe("Spotify helpers", () => {
     });
     expect(requests[0]?.body).toContain("grant_type=refresh_token");
     expect(requests[0]?.body).toContain("refresh_token=refresh-token");
-    expect(requests[0]?.body).toContain("client_id=client-id");
+    expect(
+      new Headers(
+        requests[0]?.headers as ConstructorParameters<typeof Headers>[0],
+      ).get("authorization"),
+    ).toBe(
+      `Basic ${Buffer.from("client%2Did:client%2Dsecret").toString("base64")}`,
+    );
   });
 });
 

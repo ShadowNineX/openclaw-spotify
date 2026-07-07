@@ -67,7 +67,9 @@ async function runSpotifyAuthLogin(
 
   console.log("Spotify OAuth login started.");
   console.log("");
-  console.log("If OpenClaw is running on a VPS, make sure this port forward exists from your local machine:");
+  console.log(
+    "If OpenClaw is running on a VPS, make sure this port forward exists from your local machine:",
+  );
   console.log("  ssh -L 4377:127.0.0.1:4377 user@your-vps");
   console.log("");
   console.log("Then open this authorization URL in your local browser:");
@@ -83,10 +85,14 @@ async function runSpotifyAuthLogin(
     );
   }
 
-  console.log(`Spotify OAuth complete. Refresh token saved via ${completed.storage}.`);
+  console.log(
+    `Spotify OAuth complete. Refresh token saved via ${completed.storage}.`,
+  );
 }
 
-function resolveSpotifyPluginConfig(config: OpenClawConfig): SpotifyPluginConfig {
+function resolveSpotifyPluginConfig(
+  config: OpenClawConfig,
+): SpotifyPluginConfig {
   const pluginConfig = readPath(config as Record<string, unknown>, [
     "plugins",
     "entries",
@@ -118,7 +124,7 @@ function parseTimeoutSeconds(value: string): number {
   const timeout = Number(value);
 
   if (!Number.isInteger(timeout)) {
-    throw new Error("Timeout must be an integer number of seconds.");
+    throw new TypeError("Timeout must be an integer number of seconds.");
   }
 
   return timeout;

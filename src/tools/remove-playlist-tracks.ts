@@ -15,10 +15,10 @@ export function defineRemovePlaylistTracksTool(
       "Remove tracks from one of the authorized user's editable playlists.",
     parameters: playlistTracksEditSchema,
     async execute(params, config, context) {
-      const sdk = getSpotifyUserClient(config, context.api);
+      const client = getSpotifyUserClient(config, context.api);
       const uris = normalizeSpotifyTrackUris(params.uris);
 
-      await sdk.playlists.removeItemsFromPlaylist(params.id, {
+      await client.playlists.removeItems(params.id, {
         tracks: uris.map((uri) => ({ uri })),
         snapshot_id: params.snapshotId,
       });

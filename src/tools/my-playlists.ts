@@ -15,11 +15,11 @@ export function defineMyPlaylistsTool(tool: SpotifyToolFactory): SpotifyTool {
     description: "List playlists for the authorized Spotify user.",
     parameters: myPlaylistsSchema,
     async execute(params, config, context) {
-      const sdk = getSpotifyUserClient(config, context.api);
-      const playlists = await sdk.currentUser.playlists.playlists(
-        clampSpotifyLimit(params.limit, 20),
-        clampSpotifyOffset(params.offset),
-      );
+      const client = getSpotifyUserClient(config, context.api);
+      const playlists = await client.playlists.getCurrentUserPlaylists({
+        limit: clampSpotifyLimit(params.limit, 20),
+        offset: clampSpotifyOffset(params.offset),
+      });
 
       return summarizePage(playlists, summarizePlaylist);
     },

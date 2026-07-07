@@ -1,3 +1,5 @@
+import type { Album, Artist, Paging, Playlist, Track } from "@shadownine/foxify";
+
 import {
   clampSpotifyLimit,
   clampSpotifyOffset,
@@ -21,19 +23,21 @@ export function defineSearchTool(tool: SpotifyToolFactory): SpotifyTool {
       "Search Spotify catalog metadata for tracks, artists, albums, and playlists.",
     parameters: searchSchema,
     async execute(params, config) {
-      const sdk = getSpotifyClient(config);
+      const client = getSpotifyClient(config);
       const types = (
         params.types?.length ? params.types : ["track", "artist"]
       ) as SpotifySearchType[];
       const market = resolveSpotifyMarket(params.market, config);
       const limit = clampSpotifyLimit(params.limit, 10);
       const offset = clampSpotifyOffset(params.offset);
-      const result = await sdk.search(
+      const result = await client.search.items(
         params.query,
         types,
-        market,
-        limit,
-        offset,
+        {
+          market,
+          limit,
+          offset,
+        },
       );
 
       return {
@@ -41,19 +45,22 @@ export function defineSearchTool(tool: SpotifyToolFactory): SpotifyTool {
         types,
         tracks:
           "tracks" in result && result.tracks
-            ? summarizePage(result.tracks, summarizeTrack)
+            ? summarizePage(result.tracks as Paging<Track>, summarizeTrack)
             : undefined,
         artists:
           "artists" in result && result.artists
-            ? summarizePage(result.artists, summarizeArtist)
+            ? summarizePage(result.artists as Paging<Artist>, summarizeArtist)
             : undefined,
         albums:
           "albums" in result && result.albums
-            ? summarizePage(result.albums, summarizeAlbum)
+            ? summarizePage(result.albums as Paging<Album>, summarizeAlbum)
             : undefined,
         playlists:
           "playlists" in result && result.playlists
-            ? summarizePage(result.playlists, summarizePlaylist)
+            ? summarizePage(
+                result.playlists as Paging<Playlist>,
+                summarizePlaylist,
+              )
             : undefined,
       };
     },

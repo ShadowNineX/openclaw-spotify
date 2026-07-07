@@ -18,17 +18,16 @@ export function defineAlbumTool(tool: SpotifyToolFactory): SpotifyTool {
       "Get Spotify catalog metadata for an album by Spotify album ID.",
     parameters: albumSchema,
     async execute(params, config) {
-      const sdk = getSpotifyClient(config);
+      const client = getSpotifyClient(config);
       const market = resolveSpotifyMarket(params.market, config);
-      const album = await sdk.albums.get(params.id, market);
+      const album = await client.albums.get(params.id, { market });
       const includeTracks = params.includeTracks !== false;
       const tracks = includeTracks
-        ? await sdk.albums.tracks(
-            params.id,
+        ? await client.albums.getTracks(params.id, {
             market,
-            clampSpotifyLimit(params.limit, 20),
-            clampSpotifyOffset(params.offset),
-          )
+            limit: clampSpotifyLimit(params.limit, 20),
+            offset: clampSpotifyOffset(params.offset),
+          })
         : undefined;
 
       return {

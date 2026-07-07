@@ -12,12 +12,9 @@ export function defineDeletePlaylistTool(
       "Delete or remove a playlist from the authorized user's Spotify library.",
     parameters: deletePlaylistSchema,
     async execute(params, config, context) {
-      const sdk = getSpotifyUserClient(config, context.api);
+      const client = getSpotifyUserClient(config, context.api);
 
-      await sdk.makeRequest(
-        "DELETE",
-        `playlists/${encodeURIComponent(params.id)}/followers`,
-      );
+      await client.users.unfollowPlaylist(params.id);
 
       return {
         id: params.id,

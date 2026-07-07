@@ -13,7 +13,7 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "bun build ./index.ts --outdir ./dist --target bun --format esm --external openclaw --external typebox --external @spotify/web-api-ts-sdk",
+    "build": "bun build ./index.ts --outdir ./dist --target bun --format esm --external openclaw --external typebox --external @shadownine/foxify",
     "check": "tsc --noEmit",
     "plugin:build": "bun run build && openclaw plugins build --root . --entry ./dist/index.js",
     "plugin:validate": "bun run build && openclaw plugins validate --root . --entry ./dist/index.js",
@@ -51,7 +51,7 @@
     }
   },
   "dependencies": {
-    "@spotify/web-api-ts-sdk": "^1.2.0",
+    "@shadownine/foxify": "^0.1.0",
     "typebox": "1.1.39"
   }
 }

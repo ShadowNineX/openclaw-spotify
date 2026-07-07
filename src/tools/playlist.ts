@@ -18,16 +18,14 @@ export function definePlaylistTool(tool: SpotifyToolFactory): SpotifyTool {
       "Get Spotify catalog metadata and tracks for a public playlist by Spotify playlist ID.",
     parameters: playlistSchema,
     async execute(params, config) {
-      const sdk = getSpotifyClient(config);
+      const client = getSpotifyClient(config);
       const market = resolveSpotifyMarket(params.market, config);
-      const playlist = await sdk.playlists.getPlaylist(params.id, market);
-      const tracks = await sdk.playlists.getPlaylistItems(
-        params.id,
+      const playlist = await client.playlists.get(params.id, { market });
+      const tracks = await client.playlists.getItems(params.id, {
         market,
-        undefined,
-        clampSpotifyLimit(params.limit, 20),
-        clampSpotifyOffset(params.offset),
-      );
+        limit: clampSpotifyLimit(params.limit, 20),
+        offset: clampSpotifyOffset(params.offset),
+      });
 
       return {
         playlist: summarizePlaylist(playlist),

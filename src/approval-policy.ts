@@ -182,8 +182,8 @@ async function resolvePlaylistLabel(
   }
 
   try {
-    const sdk = getSpotifyUserClient(config, api);
-    const playlist = await sdk.playlists.getPlaylist(id);
+    const client = getSpotifyUserClient(config, api);
+    const playlist = await client.playlists.get(id);
 
     return formatPlaylistLabel(id, playlist.name);
   } catch {

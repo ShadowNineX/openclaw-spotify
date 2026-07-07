@@ -14,10 +14,12 @@ export function defineAddPlaylistTracksTool(
     description: "Add tracks to one of the authorized user's editable playlists.",
     parameters: playlistTracksEditSchema,
     async execute(params, config, context) {
-      const sdk = getSpotifyUserClient(config, context.api);
+      const client = getSpotifyUserClient(config, context.api);
       const uris = normalizeSpotifyTrackUris(params.uris);
 
-      await sdk.playlists.addItemsToPlaylist(params.id, uris, params.position);
+      await client.playlists.addItems(params.id, uris, {
+        position: params.position,
+      });
 
       return {
         id: params.id,

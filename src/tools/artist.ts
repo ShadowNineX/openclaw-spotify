@@ -15,14 +15,13 @@ export function defineArtistTool(tool: SpotifyToolFactory): SpotifyTool {
       "Get Spotify catalog metadata for an artist by Spotify artist ID.",
     parameters: artistSchema,
     async execute(params, config) {
-      const sdk = getSpotifyClient(config);
-      const artist = await sdk.artists.get(params.id);
+      const client = getSpotifyClient(config);
+      const artist = await client.artists.get(params.id);
       const includeTopTracks = params.includeTopTracks !== false;
       const topTracks = includeTopTracks
-        ? await sdk.artists.topTracks(
-            params.id,
-            resolveSpotifyMarket(params.market, config) ?? "US",
-          )
+        ? await client.artists.getTopTracks(params.id, {
+            market: resolveSpotifyMarket(params.market, config) ?? "US",
+          })
         : undefined;
 
       return {

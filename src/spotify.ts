@@ -1,36 +1,94 @@
-import { SpotifyApi } from "@spotify/web-api-ts-sdk";
+import {
+  clientCredentialsToken,
+  createAuthorizeUrl,
+  createPkceChallenge,
+  createSpotifyClient,
+  exchangeAuthorizationCode as exchangeFoxifyAuthorizationCode,
+  refreshAccessToken as refreshFoxifyAccessToken,
+} from "@shadownine/foxify";
 import type {
-  AccessToken,
   Album,
   Artist,
   Device,
-  ItemTypes,
-  Market,
-  MaxInt,
-  Page,
+  Episode,
+  FetchLike,
+  Paging as Page,
   PlaybackState,
   Playlist,
-  PlaylistedTrack,
   Queue,
-  SimplifiedAlbum,
-  SimplifiedEpisode,
-  SimplifiedPlaylist,
-  SimplifiedTrack,
+  SearchType,
+  SpotifyClient,
+  TokenResponse,
   Track,
-  TrackItem,
-  IAuthStrategy,
-  SdkConfiguration,
-} from "@spotify/web-api-ts-sdk";
+} from "@shadownine/foxify";
 
 export const SPOTIFY_SEARCH_TYPES = [
   "track",
   "artist",
   "album",
   "playlist",
-] as const satisfies readonly ItemTypes[];
+] as const satisfies readonly SearchType[];
 
 export type SpotifySearchType = (typeof SPOTIFY_SEARCH_TYPES)[number];
-export type SpotifyLimit = Exclude<MaxInt<50>, 0>;
+type SpotifyAccessToken = TokenResponse & {
+  expires: number;
+  refresh_token: string;
+};
+type TrackItem = Track | Episode;
+type PlaylistedTrack = {
+  added_at?: string;
+  track?: TrackItem | null;
+};
+type SpotifyExternalUrls = {
+  spotify?: string;
+};
+type SpotifyImage = {
+  url: string;
+};
+type SpotifyArtistReference = Artist & {
+  external_urls?: SpotifyExternalUrls;
+  followers?: {
+    total: number;
+  };
+  genres?: string[];
+  images?: SpotifyImage[];
+  name?: string;
+  popularity?: number;
+  uri?: string;
+};
+type SpotifyAlbumReference = Album & {
+  album_type?: string;
+  artists?: SpotifyArtistReference[];
+  external_urls?: SpotifyExternalUrls;
+  images?: SpotifyImage[];
+  label?: string;
+  name?: string;
+  popularity?: number;
+  release_date?: string;
+  total_tracks?: number;
+  uri?: string;
+};
+type SpotifyTrackReference = Track & {
+  album?: SpotifyAlbumReference;
+  artists?: SpotifyArtistReference[];
+  disc_number?: number;
+  duration_ms?: number;
+  explicit?: boolean;
+  external_urls?: SpotifyExternalUrls;
+  name?: string;
+  popularity?: number;
+  preview_url?: string | null;
+  track_number?: number;
+  uri?: string;
+};
+type SpotifyEpisodeReference = Episode & {
+  description?: string;
+  duration_ms?: number;
+  explicit?: boolean;
+  external_urls?: SpotifyExternalUrls;
+  name?: string;
+  uri?: string;
+};
 
 export type SpotifyPluginConfig = {
   clientId?: unknown;
@@ -131,14 +189,14 @@ type SpotifyPlaylistSummarySource = {
 let cachedClient:
   | {
       cacheKey: string;
-      sdk: SpotifyApi;
+      client: SpotifyClient;
     }
   | undefined;
 
 let cachedUserClient:
   | {
       cacheKey: string;
-      sdk: SpotifyApi;
+      client: SpotifyClient;
     }
   | undefined;
 let lastSavedRefreshToken: string | undefined;
@@ -166,27 +224,27 @@ export const DEFAULT_SPOTIFY_REDIRECT_URI =
 const SPOTIFY_OAUTH_STORE_NAMESPACE = "oauth";
 const SPOTIFY_REFRESH_TOKEN_STORE_KEY = "user-refresh-token";
 
-export function getSpotifyClient(config: SpotifyPluginConfig): SpotifyApi {
+export function getSpotifyClient(config: SpotifyPluginConfig): SpotifyClient {
   const credentials = resolveSpotifyCredentials(config);
   const cacheKey = `${credentials.clientId}:${credentials.clientSecret}`;
 
   if (cachedClient?.cacheKey === cacheKey) {
-    return cachedClient.sdk;
+    return cachedClient.client;
   }
 
-  const sdk = SpotifyApi.withClientCredentials(
-    credentials.clientId,
-    credentials.clientSecret,
-  );
+  const tokenProvider = new SpotifyClientCredentialsAuthProvider(credentials);
+  const client = createSpotifyClient({
+    getAccessToken: () => tokenProvider.getAccessToken(),
+  });
 
-  cachedClient = { cacheKey, sdk };
-  return sdk;
+  cachedClient = { cacheKey, client };
+  return client;
 }
 
 export function getSpotifyUserClient(
   config: SpotifyPluginConfig,
   api?: SpotifyRuntimeApi,
-): SpotifyApi {
+): SpotifyClient {
   const credentials = resolveSpotifyCredentials(config);
   const refreshTokens = resolveSpotifyRefreshTokenCandidates(config, api);
   const cacheKey = [
@@ -196,19 +254,24 @@ export function getSpotifyUserClient(
   ].join(":");
 
   if (cachedUserClient?.cacheKey === cacheKey) {
-    return cachedUserClient.sdk;
+    return cachedUserClient.client;
   }
 
-  const sdk = new SpotifyApi(
-    new SpotifyRefreshTokenAuthStrategy(credentials, refreshTokens, async (
+  const tokenProvider = new SpotifyRefreshTokenAuthProvider(
+    credentials,
+    refreshTokens,
+    async (
       refreshToken,
     ) => {
       await saveSpotifyRefreshToken(api, { refreshToken });
-    }),
+    },
   );
+  const client = createSpotifyClient({
+    getAccessToken: () => tokenProvider.getAccessToken(),
+  });
 
-  cachedUserClient = { cacheKey, sdk };
-  return sdk;
+  cachedUserClient = { cacheKey, client };
+  return client;
 }
 
 export function canPersistSpotifyRefreshToken(api?: SpotifyRuntimeApi): boolean {
@@ -341,27 +404,19 @@ export async function buildSpotifyAuthorizationUrl(
 ) {
   const credentials = resolveSpotifyCredentials(config);
   const redirectUri = resolveSpotifyRedirectUri(config);
-  const codeVerifier = createCodeVerifier();
-  const codeChallenge = await createCodeChallenge(codeVerifier);
-  const url = new URL("https://accounts.spotify.com/authorize");
-
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("client_id", credentials.clientId);
-  url.searchParams.set("scope", scopes.join(" "));
-  url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("code_challenge_method", "S256");
-  url.searchParams.set("code_challenge", codeChallenge);
-
-  if (showDialog) {
-    url.searchParams.set("show_dialog", "true");
-  }
-
-  if (state) {
-    url.searchParams.set("state", state);
-  }
+  const { codeVerifier, codeChallenge, codeChallengeMethod } =
+    await createPkceChallenge();
 
   return {
-    authorizationUrl: url.toString(),
+    authorizationUrl: createAuthorizeUrl({
+      clientId: credentials.clientId,
+      redirectUri,
+      scopes,
+      state,
+      showDialog,
+      codeChallenge,
+      codeChallengeMethod,
+    }),
     codeVerifier,
     redirectUri,
     scopes,
@@ -380,28 +435,13 @@ export async function exchangeSpotifyAuthorizationCode(
     config.redirectUri,
     process.env.SPOTIFY_REDIRECT_URI,
   ) ?? DEFAULT_SPOTIFY_REDIRECT_URI;
-
-  const body = new URLSearchParams({
-    grant_type: "authorization_code",
+  const token = await exchangeFoxifyAuthorizationCode({
+    clientId: credentials.clientId,
+    clientSecret: credentials.clientSecret,
     code,
-    redirect_uri: resolvedRedirectUri,
-    client_id: credentials.clientId,
-    code_verifier: codeVerifier,
+    codeVerifier,
+    redirectUri: resolvedRedirectUri,
   });
-  const response = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-  });
-  const text = await response.text();
-
-  if (!response.ok) {
-    throw new Error(`Spotify OAuth token exchange failed: ${text}`);
-  }
-
-  const token = JSON.parse(text) as AccessToken & { scope?: string };
 
   if (!token.access_token || !token.refresh_token) {
     throw new Error("Spotify OAuth token exchange returned an invalid token.");
@@ -419,7 +459,7 @@ export async function exchangeSpotifyAuthorizationCode(
 export function resolveSpotifyMarket(
   value: string | undefined,
   config: SpotifyPluginConfig,
-): Market | undefined {
+): string | undefined {
   const market = firstNonEmptyString(value, config.market)?.toUpperCase();
 
   if (!market) {
@@ -432,13 +472,13 @@ export function resolveSpotifyMarket(
     );
   }
 
-  return market as Market;
+  return market;
 }
 
 export function clampSpotifyLimit(
   value: number | undefined,
-  fallback: SpotifyLimit,
-): SpotifyLimit {
+  fallback: number,
+): number {
   const limit = value ?? fallback;
 
   if (!isSpotifyLimit(limit)) {
@@ -510,100 +550,108 @@ export function normalizeSpotifyContextUri(value: string): string {
   throw new Error(`Invalid Spotify context URI or URL: ${value}`);
 }
 
-export function summarizeTrack(track: Track | SimplifiedTrack) {
+export function summarizeTrack(track: Track) {
+  const source = track as SpotifyTrackReference;
+  const artists = source.artists ?? [];
+  const album = source.album;
+
   return {
-    id: track.id,
-    name: track.name,
-    artists: track.artists.map((artist) => ({
+    id: source.id,
+    name: source.name,
+    artists: artists.map((artist) => ({
       id: artist.id,
       name: artist.name,
       uri: artist.uri,
-      url: artist.external_urls.spotify,
+      url: artist.external_urls?.spotify,
     })),
-    album:
-      "album" in track
+    album: album
         ? {
-            id: track.album.id,
-            name: track.album.name,
-            releaseDate: track.album.release_date,
-            uri: track.album.uri,
-            url: track.album.external_urls.spotify,
+            id: album.id,
+            name: album.name,
+            releaseDate: album.release_date,
+            uri: album.uri,
+            url: album.external_urls?.spotify,
           }
         : undefined,
-    durationMs: track.duration_ms,
-    explicit: track.explicit,
-    popularity: "popularity" in track ? track.popularity : undefined,
-    previewUrl: track.preview_url,
-    trackNumber: track.track_number,
-    discNumber: track.disc_number,
-    uri: track.uri,
-    url: track.external_urls.spotify,
+    durationMs: source.duration_ms,
+    explicit: source.explicit,
+    popularity: source.popularity,
+    previewUrl: source.preview_url,
+    trackNumber: source.track_number,
+    discNumber: source.disc_number,
+    uri: source.uri,
+    url: source.external_urls?.spotify,
   };
 }
 
 export function summarizeArtist(artist: Artist) {
+  const source = artist as SpotifyArtistReference;
+
   return {
-    id: artist.id,
-    name: artist.name,
-    genres: artist.genres,
-    followers: artist.followers.total,
-    popularity: artist.popularity,
-    image: artist.images[0]?.url,
-    uri: artist.uri,
-    url: artist.external_urls.spotify,
+    id: source.id,
+    name: source.name,
+    genres: source.genres,
+    followers: source.followers?.total,
+    popularity: source.popularity,
+    image: source.images?.[0]?.url,
+    uri: source.uri,
+    url: source.external_urls?.spotify,
   };
 }
 
-export function summarizeAlbum(album: Album | SimplifiedAlbum) {
+export function summarizeAlbum(album: Album) {
+  const source = album as SpotifyAlbumReference;
+  const artists = source.artists ?? [];
+
   return {
-    id: album.id,
-    name: album.name,
-    albumType: album.album_type,
-    artists: album.artists.map((artist) => ({
+    id: source.id,
+    name: source.name,
+    albumType: source.album_type,
+    artists: artists.map((artist) => ({
       id: artist.id,
       name: artist.name,
       uri: artist.uri,
-      url: artist.external_urls.spotify,
+      url: artist.external_urls?.spotify,
     })),
-    releaseDate: album.release_date,
-    totalTracks: album.total_tracks,
-    label: "label" in album ? album.label : undefined,
-    popularity: "popularity" in album ? album.popularity : undefined,
-    image: album.images[0]?.url,
-    uri: album.uri,
-    url: album.external_urls.spotify,
+    releaseDate: source.release_date,
+    totalTracks: source.total_tracks,
+    label: source.label,
+    popularity: source.popularity,
+    image: source.images?.[0]?.url,
+    uri: source.uri,
+    url: source.external_urls?.spotify,
   };
 }
 
 export function summarizePlaylist(
-  playlist: Playlist | SimplifiedPlaylist | SpotifyPlaylistSummarySource,
+  playlist: Playlist | SpotifyPlaylistSummarySource,
 ) {
-  const trackReference =
-    "tracks" in playlist && playlist.tracks ? playlist.tracks : undefined;
+  const source = playlist as Playlist & SpotifyPlaylistSummarySource;
+  const trackReference = source.tracks;
 
   return {
-    id: playlist.id,
-    name: playlist.name,
-    description: playlist.description,
-    owner: playlist.owner
+    id: source.id,
+    name: source.name,
+    description: source.description,
+    owner: source.owner
       ? {
-          id: playlist.owner.id,
-          displayName: playlist.owner.display_name,
-          uri: playlist.owner.uri,
-          url: playlist.owner.external_urls.spotify,
+          id: source.owner.id,
+          displayName: source.owner.display_name,
+          uri: source.owner.uri,
+          url: source.owner.external_urls.spotify,
         }
       : undefined,
-    public: playlist.public,
-    collaborative: playlist.collaborative,
-    followers: playlist.followers?.total,
+    public: source.public,
+    collaborative: source.collaborative,
+    followers: source.followers?.total,
     totalTracks: trackReference?.total,
-    image: playlist.images[0]?.url,
-    uri: playlist.uri,
-    url: playlist.external_urls.spotify,
+    image: source.images?.[0]?.url,
+    uri: source.uri,
+    url: source.external_urls?.spotify,
   };
 }
 
-export function summarizePlaylistTrack(item: PlaylistedTrack<TrackItem>) {
+export function summarizePlaylistTrack(item: PlaylistedTrack) {
   const track = item.track;
 
   if (track?.type !== "track") {
@@ -654,7 +702,9 @@ export function summarizePlaybackState(playback: PlaybackState | null) {
       ? {
           type: playback.context.type,
           uri: playback.context.uri,
-          url: playback.context.external_urls.spotify,
+          url: (
+            playback.context.external_urls as SpotifyExternalUrls | undefined
+          )?.spotify,
         }
       : undefined,
     item: summarizeTrackItem(playback.item),
@@ -704,9 +754,41 @@ function resolveSpotifyCredentials(
   return { clientId, clientSecret };
 }
 
-class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
-  private accessToken: AccessToken | null = null;
-  private configuration: SdkConfiguration | undefined;
+class SpotifyClientCredentialsAuthProvider {
+  private accessToken: SpotifyAccessToken | null = null;
+
+  constructor(private readonly credentials: SpotifyCredentials) {}
+
+  async getAccessToken(): Promise<string> {
+    if (this.accessToken && this.accessToken.expires > Date.now() + 60_000) {
+      return this.accessToken.access_token;
+    }
+
+    const token = await clientCredentialsToken({
+      clientId: this.credentials.clientId,
+      clientSecret: this.credentials.clientSecret,
+    });
+
+    if (!token.access_token || !token.expires_in) {
+      throw new Error(
+        "Spotify client credentials token request returned an invalid token.",
+      );
+    }
+
+    this.accessToken = {
+      access_token: token.access_token,
+      token_type: normalizeSpotifyTokenType(token.token_type),
+      expires_in: token.expires_in,
+      refresh_token: "",
+      expires: Date.now() + token.expires_in * 1000,
+    };
+
+    return this.accessToken.access_token;
+  }
+}
+
+class SpotifyRefreshTokenAuthProvider {
+  private accessToken: SpotifyAccessToken | null = null;
   private refreshTokens: SpotifyRefreshTokenCandidate[];
 
   constructor(
@@ -719,33 +801,18 @@ class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
     this.refreshTokens = [...refreshTokens];
   }
 
-  setConfiguration(configuration: SdkConfiguration): void {
-    this.configuration = configuration;
-  }
-
-  async getOrCreateAccessToken(): Promise<AccessToken> {
-    if (
-      this.accessToken &&
-      (this.accessToken.expires ?? 0) > Date.now() + 60_000
-    ) {
-      return this.accessToken;
+  async getAccessToken(): Promise<string> {
+    if (this.accessToken && this.accessToken.expires > Date.now() + 60_000) {
+      return this.accessToken.access_token;
     }
 
     this.accessToken = await refreshSpotifyAccessTokenFromCandidates(
       this.credentials,
       this.refreshTokens,
-      this.configuration?.fetch,
       (refreshToken) => this.handleRefreshTokenRotated(refreshToken),
     );
-    return this.accessToken;
-  }
 
-  async getAccessToken(): Promise<AccessToken | null> {
-    return this.accessToken;
-  }
-
-  removeAccessToken(): void {
-    this.accessToken = null;
+    return this.accessToken.access_token;
   }
 
   private async handleRefreshTokenRotated(refreshToken: string): Promise<void> {
@@ -764,33 +831,19 @@ class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
 export async function refreshSpotifyAccessToken(
   credentials: SpotifyCredentials,
   refreshToken: string,
-  fetchImplementation: SdkConfiguration["fetch"] = fetch,
-): Promise<AccessToken> {
-  const body = new URLSearchParams({
-    client_id: credentials.clientId,
-    grant_type: "refresh_token",
-    refresh_token: refreshToken,
-  });
-  const response = await fetchImplementation(
-    "https://accounts.spotify.com/api/token",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body,
-    },
-  );
-  const text = await response.text();
-
-  if (!response.ok) {
+  fetchImplementation: FetchLike = fetch,
+): Promise<SpotifyAccessToken> {
+  const token = await refreshFoxifyAccessToken({
+    clientId: credentials.clientId,
+    clientSecret: credentials.clientSecret,
+    refreshToken,
+    fetch: fetchImplementation,
+  }).catch((error) => {
     throw new SpotifyTokenRefreshError(
-      `Spotify access token refresh failed: ${text}`,
-      text,
+      `Spotify access token refresh failed: ${String(error)}`,
+      serializeErrorForInvalidGrantDetection(error),
     );
-  }
-
-  const token = JSON.parse(text) as Partial<AccessToken>;
+  });
 
   if (!token.access_token || !token.expires_in) {
     throw new Error("Spotify access token refresh returned an invalid token.");
@@ -798,7 +851,7 @@ export async function refreshSpotifyAccessToken(
 
   return {
     access_token: token.access_token,
-    token_type: token.token_type ?? "Bearer",
+    token_type: normalizeSpotifyTokenType(token.token_type),
     expires_in: token.expires_in,
     refresh_token: token.refresh_token ?? refreshToken,
     expires: Date.now() + token.expires_in * 1000,
@@ -808,9 +861,8 @@ export async function refreshSpotifyAccessToken(
 async function refreshSpotifyAccessTokenFromCandidates(
   credentials: SpotifyCredentials,
   refreshTokens: readonly SpotifyRefreshTokenCandidate[],
-  fetchImplementation: SdkConfiguration["fetch"] = fetch,
   onRefreshTokenRotated?: SpotifyRefreshTokenRotationHandler,
-): Promise<AccessToken> {
+): Promise<SpotifyAccessToken> {
   let invalidGrantError: unknown;
 
   for (const candidate of refreshTokens) {
@@ -818,7 +870,6 @@ async function refreshSpotifyAccessTokenFromCandidates(
       const accessToken = await refreshSpotifyAccessToken(
         credentials,
         candidate.refreshToken,
-        fetchImplementation,
       );
 
       if (accessToken.refresh_token !== candidate.refreshToken) {
@@ -989,7 +1040,79 @@ function isInvalidGrantError(error: unknown): boolean {
   }
 }
 
-function isSpotifyLimit(value: number): value is SpotifyLimit {
+function serializeErrorForInvalidGrantDetection(error: unknown): string {
+  const parts: string[] = [];
+  const seen = new WeakSet<object>();
+
+  const collect = (value: unknown, depth: number): void => {
+    if (value === undefined || value === null || depth > 4) {
+      return;
+    }
+
+    if (typeof value === "string") {
+      parts.push(value);
+      return;
+    }
+
+    if (value instanceof Error) {
+      parts.push(value.name, value.message);
+      collect((value as { cause?: unknown }).cause, depth + 1);
+      return;
+    }
+
+    if (typeof value !== "object") {
+      parts.push(serializePrimitive(value));
+      return;
+    }
+
+    if (seen.has(value)) {
+      return;
+    }
+
+    seen.add(value);
+
+    parts.push(serializeObject(value));
+
+    const record = value as Record<string, unknown>;
+    collect(record.error, depth + 1);
+    collect(record.error_description, depth + 1);
+    collect(record.cause, depth + 1);
+  };
+
+  collect(error, 0);
+  return parts.join(" ");
+}
+
+function normalizeSpotifyTokenType(value: string | undefined): string {
+  return value?.toLowerCase() === "bearer" ? "Bearer" : (value ?? "Bearer");
+}
+
+function serializePrimitive(value: unknown): string {
+  switch (typeof value) {
+    case "number":
+    case "boolean":
+    case "bigint":
+      return value.toString();
+    case "symbol":
+      return value.description ?? value.toString();
+    case "function":
+      return "[function]";
+    case "undefined":
+      return "undefined";
+    default:
+      return "[unknown primitive]";
+  }
+}
+
+function serializeObject(value: object): string {
+  try {
+    return JSON.stringify(value) ?? "[unserializable object]";
+  } catch {
+    return "[unserializable object]";
+  }
+}
+
+function isSpotifyLimit(value: number): boolean {
   return Number.isInteger(value) && value >= 1 && value <= 50;
 }
 
@@ -1025,15 +1148,17 @@ function summarizeTrackItem(item: TrackItem | null | undefined) {
     };
   }
 
+  const episode = item as SpotifyEpisodeReference;
+
   return {
     type: "episode",
-    id: item.id,
-    name: item.name,
-    description: (item as SimplifiedEpisode).description,
-    durationMs: item.duration_ms,
-    explicit: item.explicit,
-    uri: item.uri,
-    url: item.external_urls.spotify,
+    id: episode.id,
+    name: episode.name,
+    description: episode.description,
+    durationMs: episode.duration_ms,
+    explicit: episode.explicit,
+    uri: episode.uri,
+    url: episode.external_urls?.spotify,
   };
 }
 
@@ -1059,26 +1184,4 @@ function parseSpotifyUrl(
   }
 
   return { type, id };
-}
-
-function createCodeVerifier(): string {
-  const bytes = new Uint8Array(64);
-  crypto.getRandomValues(bytes);
-
-  return base64UrlEncode(bytes);
-}
-
-async function createCodeChallenge(codeVerifier: string): Promise<string> {
-  const bytes = new TextEncoder().encode(codeVerifier);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-
-  return base64UrlEncode(new Uint8Array(digest));
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  return Buffer.from(bytes)
-    .toString("base64")
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
 }
