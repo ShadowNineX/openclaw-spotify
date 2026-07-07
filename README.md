@@ -23,7 +23,7 @@ manually as a fallback:
 {
   "plugins": {
     "entries": {
-      "spotify": {
+      "openclaw-spotify": {
         "enabled": true,
         "config": {
           "clientId": "your-client-id",
@@ -117,7 +117,7 @@ should run without a plugin approval prompt:
 {
   "plugins": {
     "entries": {
-      "spotify": {
+      "openclaw-spotify": {
         "config": {
           "playlistApprovals": {
             "update": "allow",

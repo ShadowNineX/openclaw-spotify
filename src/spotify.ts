@@ -6,6 +6,7 @@ import {
   exchangeAuthorizationCode as exchangeFoxifyAuthorizationCode,
   refreshAccessToken as refreshFoxifyAccessToken,
 } from "@shadownine/foxify";
+import { SPOTIFY_PLUGIN_ID } from "./index";
 import type {
   Album,
   Artist,
@@ -370,7 +371,7 @@ async function saveSpotifyRefreshTokenToConfig(
       mutate: (draft) => {
         const plugins = ensureRecord(draft, "plugins");
         const entries = ensureRecord(plugins, "entries");
-        const spotify = ensureRecord(entries, "spotify");
+        const spotify = ensureRecord(entries, SPOTIFY_PLUGIN_ID);
         const config = ensureRecord(spotify, "config");
 
         if (spotify.enabled === undefined) {
@@ -747,7 +748,7 @@ function resolveSpotifyCredentials(
 
   if (!clientId || !clientSecret) {
     throw new Error(
-      "Spotify credentials are missing. Set plugins.entries.spotify.config.clientId/clientSecret or SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET.",
+      `Spotify credentials are missing. Set plugins.entries.${SPOTIFY_PLUGIN_ID}.config.clientId/clientSecret or SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET.`,
     );
   }
 
@@ -893,7 +894,7 @@ async function refreshSpotifyAccessTokenFromCandidates(
       : "";
 
   throw new Error(
-    `Spotify refresh token is expired, revoked, or invalid for every configured token source (${sources}). Run \`openclaw spotify auth login\` again, then remove stale plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN values if they still override the saved login.${cause}`,
+    `Spotify refresh token is expired, revoked, or invalid for every configured token source (${sources}). Run \`openclaw spotify auth login\` again, then remove stale plugins.entries.${SPOTIFY_PLUGIN_ID}.config.refreshToken or SPOTIFY_REFRESH_TOKEN values if they still override the saved login.${cause}`,
   );
 }
 
@@ -922,7 +923,7 @@ function resolveSpotifyRefreshTokenCandidates(
 
   if (candidates.length === 0) {
     throw new Error(
-      "Spotify OAuth refresh token is missing. Run `openclaw spotify auth login` on the OpenClaw host, or set plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN.",
+      `Spotify OAuth refresh token is missing. Run \`openclaw spotify auth login\` on the OpenClaw host, or set plugins.entries.${SPOTIFY_PLUGIN_ID}.config.refreshToken or SPOTIFY_REFRESH_TOKEN.`,
     );
   }
 

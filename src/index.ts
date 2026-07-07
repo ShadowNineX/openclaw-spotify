@@ -1,6 +1,6 @@
 import { Type, type Static } from "typebox";
 
-export const SPOTIFY_PLUGIN_ID = "spotify";
+export const SPOTIFY_PLUGIN_ID = "openclaw-spotify";
 export const SPOTIFY_PLUGIN_NAME = "Spotify";
 export const SPOTIFY_PLUGIN_DESCRIPTION =
   "Spotify integration plugin for OpenClaw";

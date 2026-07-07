@@ -1,5 +1,5 @@
 {
-  "id": "spotify",
+  "id": "openclaw-spotify",
   "name": "Spotify",
   "description": "Spotify integration plugin for OpenClaw",
   "version": "0.1.0",
