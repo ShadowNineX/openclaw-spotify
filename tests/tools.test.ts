@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import entry from "../index";
 import { buildSpotifyToolApproval } from "../src/approval-policy";
 import { defineCreatePlaylistTool } from "../src/tools/create-playlist";
+import { defineUploadPlaylistCoverTool } from "../src/tools/upload-playlist-cover";
 
 const spotifyToolNames = [
   "spotify_search",
@@ -18,6 +19,7 @@ const spotifyToolNames = [
   "spotify_add_playlist_tracks",
   "spotify_remove_playlist_tracks",
   "spotify_reorder_playlist_tracks",
+  "spotify_upload_playlist_cover",
   "spotify_get_playback",
   "spotify_get_currently_playing",
   "spotify_list_devices",
@@ -377,6 +379,106 @@ describe("Spotify tool plugin metadata", () => {
     expect(
       updateParameters.properties.public.description,
     ).toContain("does not control who can open the playlist link");
+  });
+
+  it("uploads playlist covers as raw JPEG base64", async () => {
+    const originalFetch = globalThis.fetch;
+    let uploadedCoverBody: unknown;
+    let uploadedCoverContentType: string | undefined;
+    const uploadCoverTool = defineUploadPlaylistCoverTool(
+      ((definition: unknown) => definition) as never,
+    ) as unknown as {
+      execute(
+        params: {
+          id: string;
+          imageUrl?: string;
+          processImage?: boolean;
+          quality?: number;
+          size?: number;
+        },
+        config: {
+          clientId: string;
+          clientSecret: string;
+          refreshToken: string;
+        },
+        context: {
+          api?: unknown;
+        },
+      ): Promise<unknown>;
+    };
+
+    globalThis.fetch = (async (url, init) => {
+      const href = url instanceof Request ? url.url : String(url);
+
+      if (href === "https://example.com/cover.svg") {
+        return new Response(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#f7b733"/></svg>',
+          {
+            headers: {
+              "content-type": "image/svg+xml",
+            },
+          },
+        );
+      }
+
+      if (href === "https://accounts.spotify.com/api/token") {
+        return new Response(
+          JSON.stringify({
+            access_token: "access-token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (href === "https://api.spotify.com/v1/playlists/playlist-1/images") {
+        expect(init?.method).toBe("PUT");
+        uploadedCoverBody = init?.body;
+        uploadedCoverContentType = new Headers(init?.headers).get(
+          "content-type",
+        ) ?? undefined;
+
+        return new Response(null, { status: 202 });
+      }
+
+      return new Response("Unexpected test request", { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      await expect(
+        uploadCoverTool.execute(
+          {
+            id: "playlist-1",
+            imageUrl: "https://example.com/cover.svg",
+            size: 128,
+            quality: 80,
+          },
+          {
+            clientId: "cover-client-id",
+            clientSecret: "cover-client-secret",
+            refreshToken: "cover-refresh-token",
+          },
+          {},
+        ),
+      ).resolves.toMatchObject({
+        id: "playlist-1",
+        uploaded: true,
+        image: {
+          processed: true,
+          source: "url",
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(uploadedCoverContentType).toBe("image/jpeg");
+    expect(typeof uploadedCoverBody).toBe("string");
+    expect((uploadedCoverBody as string).length).toBeLessThanOrEqual(
+      256 * 1024,
+    );
+    expect(uploadedCoverBody).not.toContain("data:image");
   });
 
   it("falls back to playlist IDs when no display name is available", async () => {

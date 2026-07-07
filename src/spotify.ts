@@ -207,6 +207,7 @@ export const SPOTIFY_PLAYLIST_SCOPES = [
   "playlist-read-collaborative",
   "playlist-modify-private",
   "playlist-modify-public",
+  "ugc-image-upload",
 ] as const;
 export const SPOTIFY_PLAYBACK_SCOPES = [
   "user-read-playback-position",

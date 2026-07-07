@@ -174,6 +174,60 @@ export const updatePlaylistSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const uploadPlaylistCoverSchema = Type.Object(
+  {
+    id: Type.String({
+      description: "Spotify playlist ID.",
+      minLength: 1,
+    }),
+    imageUrl: Type.Optional(
+      Type.String({
+        description:
+          "HTTP(S) image URL to fetch, convert to JPEG, and upload as the playlist cover.",
+        minLength: 1,
+      }),
+    ),
+    imageDataUrl: Type.Optional(
+      Type.String({
+        description:
+          "Data URL containing image bytes. The image is converted to JPEG unless processImage is false.",
+        minLength: 1,
+      }),
+    ),
+    imageBase64: Type.Optional(
+      Type.String({
+        description:
+          "Base64 image bytes. If processImage is false, this must already be raw JPEG base64 for Spotify.",
+        minLength: 1,
+      }),
+    ),
+    processImage: Type.Optional(
+      Type.Boolean({
+        description:
+          "Convert/crop/compress the image to Spotify's JPEG cover format before upload.",
+        default: true,
+      }),
+    ),
+    size: Type.Optional(
+      Type.Integer({
+        description: "Square cover size in pixels when processing images.",
+        minimum: 64,
+        maximum: 1024,
+        default: 640,
+      }),
+    ),
+    quality: Type.Optional(
+      Type.Integer({
+        description: "Initial JPEG quality when processing images.",
+        minimum: 1,
+        maximum: 100,
+        default: 82,
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
 export const deletePlaylistSchema = Type.Object(
   {
     id: Type.String({

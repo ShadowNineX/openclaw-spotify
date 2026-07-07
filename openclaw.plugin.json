@@ -118,6 +118,7 @@
       "spotify_add_playlist_tracks",
       "spotify_remove_playlist_tracks",
       "spotify_reorder_playlist_tracks",
+      "spotify_upload_playlist_cover",
       "spotify_get_playback",
       "spotify_get_currently_playing",
       "spotify_list_devices",

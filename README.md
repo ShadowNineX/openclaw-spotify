@@ -87,6 +87,7 @@ plugin saves the replacement token back to OpenClaw automatically.
 - `spotify_add_playlist_tracks`: add tracks to a playlist.
 - `spotify_remove_playlist_tracks`: remove tracks from a playlist.
 - `spotify_reorder_playlist_tracks`: reorder tracks in a playlist.
+- `spotify_upload_playlist_cover`: upload a custom playlist cover from an image URL, data URL, or base64 image. The plugin converts/crops/compresses images to Spotify's JPEG cover format by default. OAuth must include Spotify's `ugc-image-upload` scope.
 - `spotify_get_playback`: get current playback state.
 - `spotify_get_currently_playing`: get the current item.
 - `spotify_list_devices`: list Spotify Connect devices.
