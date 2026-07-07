@@ -321,6 +321,7 @@ describe("Spotify helpers", () => {
   it("persists rotated refresh tokens returned by Spotify", async () => {
     const originalFetch = globalThis.fetch;
     const records = new Map<string, SpotifyOAuthTokenRecord>();
+    const refreshRequests: string[] = [];
     const api: SpotifyRuntimeApi = {
       runtime: {
         state: {
@@ -338,18 +339,39 @@ describe("Spotify helpers", () => {
       refreshToken: "old-rotating-token",
     });
 
-    globalThis.fetch = (async (url) => {
+    globalThis.fetch = (async (url, init) => {
       const href = url instanceof Request ? url.url : String(url);
 
       if (href === "https://accounts.spotify.com/api/token") {
+        const body = String(init?.body);
+        refreshRequests.push(body);
+
+        if (body.includes("refresh_token=old-rotating-token")) {
+          return new Response(
+            JSON.stringify({
+              access_token: "access-token-1",
+              expires_in: 1,
+              refresh_token: "rotated-token",
+              token_type: "Bearer",
+            }),
+            { status: 200 },
+          );
+        }
+
+        if (body.includes("refresh_token=rotated-token")) {
+          return new Response(
+            JSON.stringify({
+              access_token: "access-token-2",
+              expires_in: 1,
+              token_type: "Bearer",
+            }),
+            { status: 200 },
+          );
+        }
+
         return new Response(
-          JSON.stringify({
-            access_token: "access-token",
-            expires_in: 3600,
-            refresh_token: "rotated-token",
-            token_type: "Bearer",
-          }),
-          { status: 200 },
+          JSON.stringify({ error: "invalid_grant" }),
+          { status: 400 },
         );
       }
 
@@ -395,10 +417,16 @@ describe("Spotify helpers", () => {
       await expect(sdk.currentUser.profile()).resolves.toMatchObject({
         id: "me",
       });
+      await expect(sdk.currentUser.profile()).resolves.toMatchObject({
+        id: "me",
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
 
+    expect(refreshRequests).toHaveLength(2);
+    expect(refreshRequests[0]).toContain("refresh_token=old-rotating-token");
+    expect(refreshRequests[1]).toContain("refresh_token=rotated-token");
     expect(records.get("user-refresh-token")).toMatchObject({
       refreshToken: "rotated-token",
     });

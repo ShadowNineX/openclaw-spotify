@@ -707,14 +707,17 @@ function resolveSpotifyCredentials(
 class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
   private accessToken: AccessToken | null = null;
   private configuration: SdkConfiguration | undefined;
+  private refreshTokens: SpotifyRefreshTokenCandidate[];
 
   constructor(
     private readonly credentials: SpotifyCredentials,
-    private readonly refreshTokens: readonly SpotifyRefreshTokenCandidate[],
+    refreshTokens: readonly SpotifyRefreshTokenCandidate[],
     private readonly onRefreshTokenRotated:
       | SpotifyRefreshTokenRotationHandler
       | undefined,
-  ) {}
+  ) {
+    this.refreshTokens = [...refreshTokens];
+  }
 
   setConfiguration(configuration: SdkConfiguration): void {
     this.configuration = configuration;
@@ -732,7 +735,7 @@ class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
       this.credentials,
       this.refreshTokens,
       this.configuration?.fetch,
-      this.onRefreshTokenRotated,
+      (refreshToken) => this.handleRefreshTokenRotated(refreshToken),
     );
     return this.accessToken;
   }
@@ -743,6 +746,18 @@ class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
 
   removeAccessToken(): void {
     this.accessToken = null;
+  }
+
+  private async handleRefreshTokenRotated(refreshToken: string): Promise<void> {
+    this.refreshTokens = dedupeRefreshTokenCandidates([
+      {
+        refreshToken,
+        source: "last-oauth-login",
+      },
+      ...this.refreshTokens,
+    ]);
+
+    await this.onRefreshTokenRotated?.(refreshToken);
   }
 }
 
