@@ -5,7 +5,7 @@ import {
   canPersistSpotifyRefreshToken,
   exchangeSpotifyAuthorizationCode,
   saveSpotifyRefreshToken,
-  SPOTIFY_PLAYLIST_SCOPES,
+  SPOTIFY_USER_SCOPES,
   type SpotifyRuntimeApi,
   type SpotifyPluginConfig,
 } from "./spotify";
@@ -41,7 +41,7 @@ export async function startSpotifyOauthFlow(
   const timeoutMs = clampTimeoutSeconds(options.timeoutSeconds) * 1000;
   const auth = await buildSpotifyAuthorizationUrl(
     config,
-    options.scopes ?? SPOTIFY_PLAYLIST_SCOPES,
+    options.scopes ?? SPOTIFY_USER_SCOPES,
     state,
   );
   const redirectUrl = new URL(auth.redirectUri);

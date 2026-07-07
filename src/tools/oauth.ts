@@ -2,7 +2,7 @@ import {
   getSpotifyOauthFlowStatus,
   startSpotifyOauthFlow,
 } from "../oauth-flow";
-import { SPOTIFY_PLAYLIST_SCOPES } from "../spotify";
+import { SPOTIFY_USER_SCOPES } from "../spotify";
 import { oauthStartSchema, oauthStatusSchema } from "./schemas";
 import type { SpotifyTool, SpotifyToolFactory } from "./types";
 
@@ -11,12 +11,12 @@ export function defineOauthStartTool(tool: SpotifyToolFactory): SpotifyTool {
     name: "spotify_oauth_start",
     label: "Spotify OAuth Start",
     description:
-      "Start a local Spotify OAuth callback flow for playlist read/write access.",
+      "Start a local Spotify OAuth callback flow for playlist and playback access.",
     parameters: oauthStartSchema,
     async execute(params, config, context) {
       return startSpotifyOauthFlow(config, {
         api: context.api,
-        scopes: params.scopes ?? SPOTIFY_PLAYLIST_SCOPES,
+        scopes: params.scopes ?? SPOTIFY_USER_SCOPES,
         state: params.state,
         timeoutSeconds: params.timeoutSeconds,
       });

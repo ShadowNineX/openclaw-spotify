@@ -17,6 +17,20 @@ const spotifyToolNames = [
   "spotify_add_playlist_tracks",
   "spotify_remove_playlist_tracks",
   "spotify_reorder_playlist_tracks",
+  "spotify_get_playback",
+  "spotify_get_currently_playing",
+  "spotify_list_devices",
+  "spotify_get_queue",
+  "spotify_transfer_playback",
+  "spotify_play",
+  "spotify_pause",
+  "spotify_next",
+  "spotify_previous",
+  "spotify_seek",
+  "spotify_set_repeat",
+  "spotify_set_volume",
+  "spotify_set_shuffle",
+  "spotify_add_to_queue",
 ];
 
 describe("Spotify tool plugin metadata", () => {

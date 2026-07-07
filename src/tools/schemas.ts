@@ -111,7 +111,7 @@ export const oauthStartSchema = Type.Object(
     scopes: Type.Optional(
       Type.Array(Type.String({ minLength: 1 }), {
         description:
-          "Spotify OAuth scopes. Defaults to playlist read/write scopes.",
+          "Spotify OAuth scopes. Defaults to playlist read/write and playback scopes.",
         minItems: 1,
       }),
     ),
@@ -257,6 +257,166 @@ export const reorderPlaylistTracksSchema = Type.Object(
     snapshotId: Type.Optional(
       Type.String({
         description: "Playlist snapshot ID for guarded reordering.",
+        minLength: 1,
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+export const playbackReadSchema = Type.Object(
+  {
+    market: Type.Optional(marketSchema),
+  },
+  { additionalProperties: false },
+);
+
+export const playbackTransferSchema = Type.Object(
+  {
+    deviceId: Type.String({
+      description: "Spotify Connect device ID.",
+      minLength: 1,
+    }),
+    play: Type.Optional(
+      Type.Boolean({
+        description: "Start playback after transferring.",
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+export const playbackPlaySchema = Type.Object(
+  {
+    deviceId: Type.Optional(
+      Type.String({
+        description:
+          "Spotify Connect device ID. Omit to use the active device.",
+        minLength: 1,
+      }),
+    ),
+    contextUri: Type.Optional(
+      Type.String({
+        description:
+          "Spotify album, artist, playlist, or show URI/URL to play.",
+        minLength: 1,
+      }),
+    ),
+    uris: Type.Optional(
+      Type.Array(
+        Type.String({
+          description: "Spotify track or episode URI/URL/ID.",
+          minLength: 1,
+        }),
+        {
+          description: "Specific tracks or episodes to play.",
+          minItems: 1,
+          maxItems: 100,
+        },
+      ),
+    ),
+    positionMs: Type.Optional(
+      Type.Integer({
+        description: "Start position in milliseconds.",
+        minimum: 0,
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+export const playbackDeviceSchema = Type.Object(
+  {
+    deviceId: Type.Optional(
+      Type.String({
+        description:
+          "Spotify Connect device ID. Omit to use the active device.",
+        minLength: 1,
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+export const playbackSeekSchema = Type.Object(
+  {
+    positionMs: Type.Integer({
+      description: "Position to seek to in milliseconds.",
+      minimum: 0,
+    }),
+    deviceId: Type.Optional(
+      Type.String({
+        description:
+          "Spotify Connect device ID. Omit to use the active device.",
+        minLength: 1,
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+export const playbackRepeatSchema = Type.Object(
+  {
+    state: Type.Union([
+      Type.Literal("track"),
+      Type.Literal("context"),
+      Type.Literal("off"),
+    ]),
+    deviceId: Type.Optional(
+      Type.String({
+        description:
+          "Spotify Connect device ID. Omit to use the active device.",
+        minLength: 1,
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+export const playbackVolumeSchema = Type.Object(
+  {
+    volumePercent: Type.Integer({
+      description: "Playback volume from 0 to 100.",
+      minimum: 0,
+      maximum: 100,
+    }),
+    deviceId: Type.Optional(
+      Type.String({
+        description:
+          "Spotify Connect device ID. Omit to use the active device.",
+        minLength: 1,
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+export const playbackShuffleSchema = Type.Object(
+  {
+    state: Type.Boolean({
+      description: "Whether shuffle should be enabled.",
+    }),
+    deviceId: Type.Optional(
+      Type.String({
+        description:
+          "Spotify Connect device ID. Omit to use the active device.",
+        minLength: 1,
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+export const playbackQueueAddSchema = Type.Object(
+  {
+    uri: Type.String({
+      description: "Spotify track or episode URI/URL/ID to add to the queue.",
+      minLength: 1,
+    }),
+    deviceId: Type.Optional(
+      Type.String({
+        description:
+          "Spotify Connect device ID. Omit to use the active device.",
         minLength: 1,
       }),
     ),

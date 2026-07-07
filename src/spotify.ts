@@ -3,13 +3,17 @@ import type {
   AccessToken,
   Album,
   Artist,
+  Device,
   ItemTypes,
   Market,
   MaxInt,
   Page,
+  PlaybackState,
   Playlist,
   PlaylistedTrack,
+  Queue,
   SimplifiedAlbum,
+  SimplifiedEpisode,
   SimplifiedPlaylist,
   SimplifiedTrack,
   Track,
@@ -111,6 +115,18 @@ export const SPOTIFY_PLAYLIST_SCOPES = [
   "playlist-read-collaborative",
   "playlist-modify-private",
   "playlist-modify-public",
+] as const;
+export const SPOTIFY_PLAYBACK_SCOPES = [
+  "user-read-playback-position",
+  "user-read-playback-state",
+  "user-read-currently-playing",
+  "user-modify-playback-state",
+  "app-remote-control",
+  "streaming",
+] as const;
+export const SPOTIFY_USER_SCOPES = [
+  ...SPOTIFY_PLAYLIST_SCOPES,
+  ...SPOTIFY_PLAYBACK_SCOPES,
 ] as const;
 export const DEFAULT_SPOTIFY_REDIRECT_URI =
   "http://127.0.0.1:4377/callback";
@@ -311,6 +327,48 @@ export function normalizeSpotifyTrackUris(uris: readonly string[]): string[] {
   return uris.map((uri) => normalizeSpotifyTrackUri(uri));
 }
 
+export function normalizeSpotifyPlayableUri(value: string): string {
+  const trimmed = value.trim();
+
+  if (/^spotify:(track|episode):[A-Za-z0-9]+$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const url = parseSpotifyUrl(trimmed);
+
+  if (url && (url.type === "track" || url.type === "episode")) {
+    return `spotify:${url.type}:${url.id}`;
+  }
+
+  if (/^[A-Za-z0-9]+$/.test(trimmed)) {
+    return `spotify:track:${trimmed}`;
+  }
+
+  throw new Error(`Invalid Spotify track, episode URI, URL, or ID: ${value}`);
+}
+
+export function normalizeSpotifyContextUri(value: string): string {
+  const trimmed = value.trim();
+
+  if (/^spotify:(album|artist|playlist|show):[A-Za-z0-9]+$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const url = parseSpotifyUrl(trimmed);
+
+  if (
+    url &&
+    (url.type === "album" ||
+      url.type === "artist" ||
+      url.type === "playlist" ||
+      url.type === "show")
+  ) {
+    return `spotify:${url.type}:${url.id}`;
+  }
+
+  throw new Error(`Invalid Spotify context URI or URL: ${value}`);
+}
+
 export function summarizeTrack(track: Track | SimplifiedTrack) {
   return {
     id: track.id,
@@ -419,6 +477,54 @@ export function summarizePlaylistTrack(item: PlaylistedTrack<TrackItem>) {
   return {
     addedAt: item.added_at,
     ...summarizeTrack(track as Track),
+  };
+}
+
+export function summarizeDevice(device: Device) {
+  return {
+    id: device.id,
+    name: device.name,
+    type: device.type,
+    active: device.is_active,
+    restricted: device.is_restricted,
+    privateSession: device.is_private_session,
+    volumePercent: device.volume_percent,
+  };
+}
+
+export function summarizePlaybackState(playback: PlaybackState | null) {
+  if (!playback) {
+    return {
+      active: false,
+      isPlaying: false,
+    };
+  }
+
+  return {
+    active: true,
+    isPlaying: playback.is_playing,
+    progressMs: playback.progress_ms,
+    timestamp: playback.timestamp,
+    repeatState: playback.repeat_state,
+    shuffleState: playback.shuffle_state,
+    currentlyPlayingType: playback.currently_playing_type,
+    device: playback.device ? summarizeDevice(playback.device) : undefined,
+    context: playback.context
+      ? {
+          type: playback.context.type,
+          uri: playback.context.uri,
+          url: playback.context.external_urls.spotify,
+        }
+      : undefined,
+    item: summarizeTrackItem(playback.item),
+    actions: playback.actions,
+  };
+}
+
+export function summarizeQueue(queue: Queue) {
+  return {
+    currentlyPlaying: summarizeTrackItem(queue.currently_playing),
+    queue: queue.queue.map(summarizeTrackItem),
   };
 }
 
@@ -539,11 +645,65 @@ function normalizeSpotifyTrackUri(value: string): string {
     return trimmed;
   }
 
+  const url = parseSpotifyUrl(trimmed);
+
+  if (url?.type === "track") {
+    return `spotify:track:${url.id}`;
+  }
+
   if (/^[A-Za-z0-9]+$/.test(trimmed)) {
     return `spotify:track:${trimmed}`;
   }
 
   throw new Error(`Invalid Spotify track URI or ID: ${value}`);
+}
+
+function summarizeTrackItem(item: TrackItem | null | undefined) {
+  if (!item) {
+    return undefined;
+  }
+
+  if (item.type === "track") {
+    return {
+      type: "track",
+      ...summarizeTrack(item as Track),
+    };
+  }
+
+  return {
+    type: "episode",
+    id: item.id,
+    name: item.name,
+    description: (item as SimplifiedEpisode).description,
+    durationMs: item.duration_ms,
+    explicit: item.explicit,
+    uri: item.uri,
+    url: item.external_urls.spotify,
+  };
+}
+
+function parseSpotifyUrl(
+  value: string,
+): { type: string; id: string } | undefined {
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+
+  if (url.hostname !== "open.spotify.com") {
+    return undefined;
+  }
+
+  const [type, id] = url.pathname.split("/").filter(Boolean);
+
+  if (!type || !id || !/^[A-Za-z0-9]+$/.test(id)) {
+    return undefined;
+  }
+
+  return { type, id };
 }
 
 function createCodeVerifier(): string {

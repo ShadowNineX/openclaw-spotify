@@ -5,7 +5,7 @@ description: "Use the OpenClaw Spotify plugin for catalog search, OAuth setup, a
 
 # Spotify
 
-Use this skill when the user asks to search Spotify, inspect tracks/artists/albums/playlists, set up Spotify OAuth, or manage their own playlists through OpenClaw tools.
+Use this skill when the user asks to search Spotify, inspect tracks/artists/albums/playlists, set up Spotify OAuth, manage their own playlists, or control Spotify playback through OpenClaw tools.
 
 ## Tool Routing
 
@@ -15,6 +15,8 @@ Use this skill when the user asks to search Spotify, inspect tracks/artists/albu
 - Use `spotify_oauth_status` when checking whether the local OAuth flow completed.
 - Use `spotify_list_my_playlists` before modifying playlists when the user has not given a specific playlist ID.
 - Use `spotify_create_playlist`, `spotify_update_playlist`, `spotify_add_playlist_tracks`, `spotify_remove_playlist_tracks`, and `spotify_reorder_playlist_tracks` only for the authorized user's playlists.
+- Use `spotify_get_playback`, `spotify_get_currently_playing`, `spotify_list_devices`, and `spotify_get_queue` for playback state, devices, and queue inspection.
+- Use `spotify_transfer_playback`, `spotify_play`, `spotify_pause`, `spotify_next`, `spotify_previous`, `spotify_seek`, `spotify_set_repeat`, `spotify_set_volume`, `spotify_set_shuffle`, and `spotify_add_to_queue` for Spotify Connect playback control.
 
 ## OAuth Flow
 
@@ -28,6 +30,7 @@ The default callback is `http://127.0.0.1:4377/callback`. The Spotify app must a
 ## Playlist Safety
 
 - Confirm the target playlist before destructive edits like remove, reorder, visibility changes, or description changes.
+- Confirm the target device before transferring playback or changing playback on a specific device.
 - Prefer track URIs or IDs from `spotify_search` results when adding tracks.
 - For remove or reorder operations, preserve and report returned snapshot IDs when available.
 - If an operation fails due to missing OAuth, run OAuth setup instead of retrying the playlist tool.
