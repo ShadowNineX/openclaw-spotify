@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "openclaw-spotify",
+      "name": "@shadowninex/openclaw-spotify",
       "dependencies": {
         "@spotify/web-api-ts-sdk": "^1.2.0",
         "typebox": "1.1.39",

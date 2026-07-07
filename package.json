@@ -1,9 +1,8 @@
 {
-  "name": "openclaw-spotify",
+  "name": "@shadowninex/openclaw-spotify",
   "version": "0.1.0",
   "description": "Spotify integration plugin for OpenClaw",
   "type": "module",
-  "private": true,
   "files": [
     "dist",
     "skills",
@@ -38,6 +37,10 @@
     "extensions": [
       "./dist/index.js"
     ],
+    "install": {
+      "clawhubSpec": "shadowninex/openclaw-spotify",
+      "defaultChoice": "clawhub"
+    },
     "compat": {
       "pluginApi": ">=2026.6.11",
       "minGatewayVersion": "2026.6.11"
