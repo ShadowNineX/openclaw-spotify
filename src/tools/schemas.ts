@@ -127,7 +127,8 @@ export const createPlaylistSchema = Type.Object(
     ),
     public: Type.Optional(
       Type.Boolean({
-        description: "Whether the playlist should be public.",
+        description:
+          "Whether Spotify should publish the playlist on the user's profile and in search. This does not control who can open the playlist link.",
         default: false,
       }),
     ),
@@ -160,7 +161,8 @@ export const updatePlaylistSchema = Type.Object(
     ),
     public: Type.Optional(
       Type.Boolean({
-        description: "Whether the playlist should be public.",
+        description:
+          "Whether Spotify should publish the playlist on the user's profile and in search. This does not control who can open the playlist link.",
       }),
     ),
     collaborative: Type.Optional(

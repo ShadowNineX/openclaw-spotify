@@ -180,7 +180,7 @@ type SpotifyPlaylistSummarySource = {
     id: string;
     uri: string;
   };
-  public: boolean;
+  public: boolean | null;
   tracks?: {
     total: number;
   } | null;
@@ -643,6 +643,12 @@ export function summarizePlaylist(
         }
       : undefined,
     public: source.public,
+    visibility: {
+      publishedOnProfileAndSearch: source.public,
+      controlsLinkAccess: false,
+      note:
+        "Spotify Web API public=false hides playlists from profile/search; it does not control who can open the playlist link.",
+    },
     collaborative: source.collaborative,
     followers: source.followers?.total,
     totalTracks: trackReference?.total,

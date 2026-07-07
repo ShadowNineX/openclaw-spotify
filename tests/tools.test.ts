@@ -223,7 +223,7 @@ describe("Spotify tool plugin metadata", () => {
     ).toBeUndefined();
   });
 
-  it("sends private playlist creation as an explicit boolean false", async () => {
+  it("sends profile-hidden playlist creation as an explicit boolean false", async () => {
     const originalFetch = globalThis.fetch;
     let createPlaylistBody: unknown;
     let changeDetailsBody: unknown;
@@ -270,13 +270,13 @@ describe("Spotify tool plugin metadata", () => {
             collaborative: false,
             description: "Hidden from profile",
             external_urls: {
-              spotify: "https://open.spotify.com/playlist/private-1",
+              spotify: "https://open.spotify.com/playlist/profile-hidden-1",
             },
             followers: {
               total: 0,
             },
             href,
-            id: "private-1",
+            id: "profile-hidden-1",
             images: [],
             name: "Private test",
             owner: {
@@ -292,17 +292,17 @@ describe("Spotify tool plugin metadata", () => {
             public: false,
             snapshot_id: "snapshot-1",
             tracks: {
-              href: `${href}/private-1/tracks`,
+              href: `${href}/profile-hidden-1/tracks`,
               total: 0,
             },
             type: "playlist",
-            uri: "spotify:playlist:private-1",
+            uri: "spotify:playlist:profile-hidden-1",
           }),
           { status: 200 },
         );
       }
 
-      if (href === "https://api.spotify.com/v1/playlists/private-1") {
+      if (href === "https://api.spotify.com/v1/playlists/profile-hidden-1") {
         expect(init?.method).toBe("PUT");
         changeDetailsBody = JSON.parse(String(init?.body));
 
@@ -321,14 +321,18 @@ describe("Spotify tool plugin metadata", () => {
             public: false,
           },
           {
-            clientId: "create-private-client-id",
-            clientSecret: "create-private-client-secret",
-            refreshToken: "create-private-refresh-token",
+            clientId: "create-profile-hidden-client-id",
+            clientSecret: "create-profile-hidden-client-secret",
+            refreshToken: "create-profile-hidden-refresh-token",
           },
           {},
         ),
       ).resolves.toMatchObject({
         public: false,
+        visibility: {
+          publishedOnProfileAndSearch: false,
+          controlsLinkAccess: false,
+        },
       });
     } finally {
       globalThis.fetch = originalFetch;
@@ -344,6 +348,35 @@ describe("Spotify tool plugin metadata", () => {
       public: false,
       collaborative: false,
     });
+  });
+
+  it("describes Spotify playlist public flags as profile and search visibility", () => {
+    const metadata = getToolPluginMetadata(entry);
+    const createTool = metadata?.tools.find(
+      (tool) => tool.name === "spotify_create_playlist",
+    );
+    const updateTool = metadata?.tools.find(
+      (tool) => tool.name === "spotify_update_playlist",
+    );
+    const createParameters = createTool?.parameters as {
+      properties: { public: { description: string } };
+    };
+    const updateParameters = updateTool?.parameters as {
+      properties: { public: { description: string } };
+    };
+
+    expect(
+      createParameters.properties.public.description,
+    ).toContain("profile and in search");
+    expect(
+      createParameters.properties.public.description,
+    ).toContain("does not control who can open the playlist link");
+    expect(
+      updateParameters.properties.public.description,
+    ).toContain("profile and in search");
+    expect(
+      updateParameters.properties.public.description,
+    ).toContain("does not control who can open the playlist link");
   });
 
   it("falls back to playlist IDs when no display name is available", async () => {
