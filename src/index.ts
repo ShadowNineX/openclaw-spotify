@@ -9,8 +9,8 @@ export const spotifyConfigSchema = Type.Object(
   {
     clientId: Type.Optional(
       Type.String({
-      description:
-        "Spotify application client ID. Falls back to SPOTIFY_CLIENT_ID.",
+        description:
+          "Spotify application client ID. Falls back to SPOTIFY_CLIENT_ID.",
       }),
     ),
     clientSecret: Type.Optional(
@@ -22,13 +22,13 @@ export const spotifyConfigSchema = Type.Object(
     refreshToken: Type.Optional(
       Type.String({
         description:
-          "Spotify OAuth refresh token for user-library and playlist write tools. Falls back to SPOTIFY_REFRESH_TOKEN.",
+          "Spotify OAuth refresh token for user-library and playlist write tools. Falls back to SPOTIFY_REFRESH_TOKEN, then the token saved by spotify_oauth_start.",
       }),
     ),
     redirectUri: Type.Optional(
       Type.String({
         description:
-          "Spotify OAuth redirect URI for generating and exchanging PKCE authorization codes. Falls back to SPOTIFY_REDIRECT_URI.",
+          "Spotify OAuth redirect URI for generating and exchanging PKCE authorization codes. Falls back to SPOTIFY_REDIRECT_URI, then http://127.0.0.1:4377/callback.",
       }),
     ),
     market: Type.Optional(

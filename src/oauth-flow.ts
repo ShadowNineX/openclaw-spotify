@@ -2,8 +2,11 @@ import { createServer, type Server, type ServerResponse } from "node:http";
 
 import {
   buildSpotifyAuthorizationUrl,
+  canPersistSpotifyRefreshToken,
   exchangeSpotifyAuthorizationCode,
+  saveSpotifyRefreshToken,
   SPOTIFY_PLAYLIST_SCOPES,
+  type SpotifyRuntimeApi,
   type SpotifyPluginConfig,
 } from "./spotify";
 
@@ -15,6 +18,7 @@ type ActiveOauthFlow = {
 
 type CompletedOauthFlow = {
   completedAt: string;
+  persisted: boolean;
   refreshToken?: string;
   scope?: string;
 };
@@ -25,6 +29,7 @@ let completedFlow: CompletedOauthFlow | undefined;
 export async function startSpotifyOauthFlow(
   config: SpotifyPluginConfig,
   options: {
+    api?: SpotifyRuntimeApi;
     scopes?: readonly string[];
     state?: string;
     timeoutSeconds?: number;
@@ -92,10 +97,15 @@ export async function startSpotifyOauthFlow(
         auth.codeVerifier,
         auth.redirectUri,
       );
+      const persisted = saveSpotifyRefreshToken(options.api, {
+        refreshToken: token.refreshToken,
+        scope: token.scope,
+      });
 
       completedFlow = {
         completedAt: new Date().toISOString(),
-        refreshToken: token.refreshToken,
+        persisted,
+        refreshToken: persisted ? undefined : token.refreshToken,
         scope: token.scope,
       };
 
@@ -104,8 +114,10 @@ export async function startSpotifyOauthFlow(
         200,
         renderHtml(
           "Spotify OAuth complete",
-          "Copy the refresh token into plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN.",
-          token.refreshToken,
+          persisted
+            ? "Refresh token saved to OpenClaw plugin state. You can close this page."
+            : "OpenClaw plugin state was unavailable, so copy this refresh token into plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN.",
+          persisted ? undefined : token.refreshToken,
         ),
       );
     } catch (error_) {
@@ -140,6 +152,15 @@ export async function startSpotifyOauthFlow(
     authorizationUrl: auth.authorizationUrl,
     callbackUrl: auth.redirectUri,
     expiresAt: new Date(Date.now() + timeoutMs).toISOString(),
+    persistence: canPersistSpotifyRefreshToken(options.api)
+      ? {
+          enabled: true,
+          storage: "openclaw-plugin-state",
+        }
+      : {
+          enabled: false,
+          storage: "manual-config-or-env",
+        },
     scopes: auth.scopes,
   };
 }

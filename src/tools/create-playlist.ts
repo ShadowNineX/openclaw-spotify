@@ -8,8 +8,8 @@ export function defineCreatePlaylistTool(tool: SpotifyToolFactory): SpotifyTool 
     label: "Spotify Create Playlist",
     description: "Create a playlist for the authorized Spotify user.",
     parameters: createPlaylistSchema,
-    async execute(params, config) {
-      const sdk = getSpotifyUserClient(config);
+    async execute(params, config, context) {
+      const sdk = getSpotifyUserClient(config, context.api);
       const profile = await sdk.currentUser.profile();
       const playlist = await sdk.playlists.createPlaylist(profile.id, {
         name: params.name,

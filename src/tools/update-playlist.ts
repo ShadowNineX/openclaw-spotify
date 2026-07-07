@@ -8,8 +8,8 @@ export function defineUpdatePlaylistTool(tool: SpotifyToolFactory): SpotifyTool 
     label: "Spotify Update Playlist",
     description: "Update playlist name, description, visibility, or collaboration.",
     parameters: updatePlaylistSchema,
-    async execute(params, config) {
-      const sdk = getSpotifyUserClient(config);
+    async execute(params, config, context) {
+      const sdk = getSpotifyUserClient(config, context.api);
 
       await sdk.playlists.changePlaylistDetails(params.id, {
         name: params.name,

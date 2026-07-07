@@ -14,7 +14,8 @@ Plain OpenClaw plugin for Spotify catalog integrations.
 
 The read-only catalog tools use Spotify Client Credentials. Playlist management
 tools also need a Spotify OAuth refresh token. Configure either OpenClaw plugin
-config:
+config. The refresh token is normally saved automatically by `spotify_oauth_start`,
+so it only needs to be configured manually as a fallback:
 
 ```json
 {
@@ -25,8 +26,6 @@ config:
         "config": {
           "clientId": "your-client-id",
           "clientSecret": "your-client-secret",
-          "redirectUri": "http://127.0.0.1:4377/callback",
-          "refreshToken": "your-refresh-token",
           "market": "US"
         }
       }
@@ -40,14 +39,15 @@ Or environment variables:
 ```bash
 SPOTIFY_CLIENT_ID=your-client-id
 SPOTIFY_CLIENT_SECRET=your-client-secret
-SPOTIFY_REDIRECT_URI=http://127.0.0.1:4377/callback
-SPOTIFY_REFRESH_TOKEN=your-refresh-token
 ```
 
-For first-time OAuth setup, add the same redirect URI to your Spotify app
-settings, run `spotify_oauth_start`, open the returned authorization URL, and
-copy the refresh token from the callback page into config or
-`SPOTIFY_REFRESH_TOKEN`.
+For first-time OAuth setup, add `http://127.0.0.1:4377/callback` to your
+Spotify app settings, run `spotify_oauth_start`, open the returned
+authorization URL, and the callback saves the refresh token into OpenClaw plugin
+state. If plugin state is unavailable, the callback page shows the refresh token
+so you can set `plugins.entries.spotify.config.refreshToken` or
+`SPOTIFY_REFRESH_TOKEN` manually. Set `redirectUri` or `SPOTIFY_REDIRECT_URI`
+only if you want to use a different localhost callback.
 
 ## Tools
 

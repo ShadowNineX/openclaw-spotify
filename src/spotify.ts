@@ -39,6 +39,30 @@ type SpotifyCredentials = {
   clientSecret: string;
 };
 
+export type SpotifyOAuthTokenRecord = {
+  refreshToken: string;
+  scope?: string;
+  savedAt: string;
+};
+
+type SpotifyTokenStore<T> = {
+  register(key: string, value: T): void;
+  lookup(key: string): T | undefined;
+};
+
+export type SpotifyRuntimeApi = {
+  runtime?: {
+    state?: {
+      openSyncKeyedStore?: <T>(options: {
+        namespace: string;
+        maxEntries: number;
+        defaultTtlMs?: number;
+        env?: NodeJS.ProcessEnv;
+      }) => SpotifyTokenStore<T>;
+    };
+  };
+};
+
 type SpotifyPlaylistSummarySource = {
   collaborative: boolean;
   description: string;
@@ -88,6 +112,10 @@ export const SPOTIFY_PLAYLIST_SCOPES = [
   "playlist-modify-private",
   "playlist-modify-public",
 ] as const;
+export const DEFAULT_SPOTIFY_REDIRECT_URI =
+  "http://127.0.0.1:4377/callback";
+const SPOTIFY_OAUTH_STORE_NAMESPACE = "oauth";
+const SPOTIFY_REFRESH_TOKEN_STORE_KEY = "user-refresh-token";
 
 export function getSpotifyClient(config: SpotifyPluginConfig): SpotifyApi {
   const credentials = resolveSpotifyCredentials(config);
@@ -106,9 +134,12 @@ export function getSpotifyClient(config: SpotifyPluginConfig): SpotifyApi {
   return sdk;
 }
 
-export function getSpotifyUserClient(config: SpotifyPluginConfig): SpotifyApi {
+export function getSpotifyUserClient(
+  config: SpotifyPluginConfig,
+  api?: SpotifyRuntimeApi,
+): SpotifyApi {
   const credentials = resolveSpotifyCredentials(config);
-  const refreshToken = resolveSpotifyRefreshToken(config);
+  const refreshToken = resolveSpotifyRefreshToken(config, api);
   const cacheKey = `${credentials.clientId}:${refreshToken}`;
 
   if (cachedUserClient?.cacheKey === cacheKey) {
@@ -126,6 +157,32 @@ export function getSpotifyUserClient(config: SpotifyPluginConfig): SpotifyApi {
 
   cachedUserClient = { cacheKey, sdk };
   return sdk;
+}
+
+export function canPersistSpotifyRefreshToken(api?: SpotifyRuntimeApi): boolean {
+  return Boolean(openSpotifyOAuthStore(api));
+}
+
+export function saveSpotifyRefreshToken(
+  api: SpotifyRuntimeApi | undefined,
+  token: Omit<SpotifyOAuthTokenRecord, "savedAt">,
+): boolean {
+  const store = openSpotifyOAuthStore(api);
+
+  if (!store) {
+    return false;
+  }
+
+  try {
+    store.register(SPOTIFY_REFRESH_TOKEN_STORE_KEY, {
+      ...token,
+      savedAt: new Date().toISOString(),
+    });
+    cachedUserClient = undefined;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function buildSpotifyAuthorizationUrl(
@@ -169,13 +226,7 @@ export async function exchangeSpotifyAuthorizationCode(
     redirectUri,
     config.redirectUri,
     process.env.SPOTIFY_REDIRECT_URI,
-  );
-
-  if (!resolvedRedirectUri) {
-    throw new Error(
-      "Spotify redirect URI is missing. Set plugins.entries.spotify.config.redirectUri or SPOTIFY_REDIRECT_URI.",
-    );
-  }
+  ) ?? DEFAULT_SPOTIFY_REDIRECT_URI;
 
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -406,34 +457,59 @@ function resolveSpotifyCredentials(
   return { clientId, clientSecret };
 }
 
-function resolveSpotifyRefreshToken(config: SpotifyPluginConfig): string {
+function resolveSpotifyRefreshToken(
+  config: SpotifyPluginConfig,
+  api?: SpotifyRuntimeApi,
+): string {
   const refreshToken = firstNonEmptyString(
     config.refreshToken,
     process.env.SPOTIFY_REFRESH_TOKEN,
   );
 
-  if (!refreshToken) {
+  if (refreshToken) {
+    return refreshToken;
+  }
+
+  const storedToken = readStoredSpotifyRefreshToken(api);
+
+  if (!storedToken) {
     throw new Error(
-      "Spotify OAuth refresh token is missing. Set plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN.",
+      "Spotify OAuth refresh token is missing. Run spotify_oauth_start once, or set plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN.",
     );
   }
 
-  return refreshToken;
+  return storedToken;
 }
 
 function resolveSpotifyRedirectUri(config: SpotifyPluginConfig): string {
-  const redirectUri = firstNonEmptyString(
-    config.redirectUri,
-    process.env.SPOTIFY_REDIRECT_URI,
+  return (
+    firstNonEmptyString(
+      config.redirectUri,
+      process.env.SPOTIFY_REDIRECT_URI,
+    ) ?? DEFAULT_SPOTIFY_REDIRECT_URI
   );
+}
 
-  if (!redirectUri) {
-    throw new Error(
-      "Spotify redirect URI is missing. Set plugins.entries.spotify.config.redirectUri or SPOTIFY_REDIRECT_URI.",
-    );
+function readStoredSpotifyRefreshToken(
+  api?: SpotifyRuntimeApi,
+): string | undefined {
+  const store = openSpotifyOAuthStore(api);
+  const record = store?.lookup(SPOTIFY_REFRESH_TOKEN_STORE_KEY);
+
+  return firstNonEmptyString(record?.refreshToken);
+}
+
+function openSpotifyOAuthStore(
+  api?: SpotifyRuntimeApi,
+): SpotifyTokenStore<SpotifyOAuthTokenRecord> | undefined {
+  try {
+    return api?.runtime?.state?.openSyncKeyedStore?.<SpotifyOAuthTokenRecord>({
+      namespace: SPOTIFY_OAUTH_STORE_NAMESPACE,
+      maxEntries: 1,
+    });
+  } catch {
+    return undefined;
   }
-
-  return redirectUri;
 }
 
 function firstNonEmptyString(...values: unknown[]): string | undefined {

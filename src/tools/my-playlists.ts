@@ -14,8 +14,8 @@ export function defineMyPlaylistsTool(tool: SpotifyToolFactory): SpotifyTool {
     label: "Spotify My Playlists",
     description: "List playlists for the authorized Spotify user.",
     parameters: myPlaylistsSchema,
-    async execute(params, config) {
-      const sdk = getSpotifyUserClient(config);
+    async execute(params, config, context) {
+      const sdk = getSpotifyUserClient(config, context.api);
       const playlists = await sdk.currentUser.playlists.playlists(
         clampSpotifyLimit(params.limit, 20),
         clampSpotifyOffset(params.offset),

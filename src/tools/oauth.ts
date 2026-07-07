@@ -13,8 +13,9 @@ export function defineOauthStartTool(tool: SpotifyToolFactory): SpotifyTool {
     description:
       "Start a local Spotify OAuth callback flow for playlist read/write access.",
     parameters: oauthStartSchema,
-    async execute(params, config) {
+    async execute(params, config, context) {
       return startSpotifyOauthFlow(config, {
+        api: context.api,
         scopes: params.scopes ?? SPOTIFY_PLAYLIST_SCOPES,
         state: params.state,
         timeoutSeconds: params.timeoutSeconds,

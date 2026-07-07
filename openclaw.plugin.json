@@ -19,11 +19,11 @@
       },
       "refreshToken": {
         "type": "string",
-        "description": "Spotify OAuth refresh token for user-library and playlist write tools. Falls back to SPOTIFY_REFRESH_TOKEN."
+        "description": "Spotify OAuth refresh token for user-library and playlist write tools. Falls back to SPOTIFY_REFRESH_TOKEN, then the token saved by spotify_oauth_start."
       },
       "redirectUri": {
         "type": "string",
-        "description": "Spotify OAuth redirect URI for generating and exchanging PKCE authorization codes. Falls back to SPOTIFY_REDIRECT_URI."
+        "description": "Spotify OAuth redirect URI for generating and exchanging PKCE authorization codes. Falls back to SPOTIFY_REDIRECT_URI, then http://127.0.0.1:4377/callback."
       },
       "market": {
         "type": "string",

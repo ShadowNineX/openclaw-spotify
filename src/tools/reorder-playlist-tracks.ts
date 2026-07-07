@@ -11,8 +11,8 @@ export function defineReorderPlaylistTracksTool(
     description:
       "Move a range of tracks within one of the authorized user's editable playlists.",
     parameters: reorderPlaylistTracksSchema,
-    async execute(params, config) {
-      const sdk = getSpotifyUserClient(config);
+    async execute(params, config, context) {
+      const sdk = getSpotifyUserClient(config, context.api);
       const result = await sdk.playlists.updatePlaylistItems(params.id, {
         range_start: params.rangeStart,
         insert_before: params.insertBefore,
