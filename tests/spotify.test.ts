@@ -159,7 +159,7 @@ describe("Spotify helpers", () => {
     expect(draft).toEqual({
       plugins: {
         entries: {
-          "openclaw-spotify": {
+          spotify: {
             enabled: true,
             config: {
               refreshToken: "refresh-token",

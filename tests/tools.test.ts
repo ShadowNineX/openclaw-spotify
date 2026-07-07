@@ -38,7 +38,7 @@ describe("Spotify tool plugin metadata", () => {
   it("exposes the Spotify tools OpenClaw discovers", () => {
     const metadata = getToolPluginMetadata(entry);
 
-    expect(metadata?.id).toBe("openclaw-spotify");
+    expect(metadata?.id).toBe("spotify");
     expect(metadata?.tools.map((tool) => tool.name)).toEqual(spotifyToolNames);
   });
 
