@@ -329,6 +329,7 @@ export async function buildSpotifyAuthorizationUrl(
   config: SpotifyPluginConfig,
   scopes: readonly string[] = SPOTIFY_PLAYLIST_SCOPES,
   state?: string,
+  showDialog = false,
 ) {
   const credentials = resolveSpotifyCredentials(config);
   const redirectUri = resolveSpotifyRedirectUri(config);
@@ -342,6 +343,10 @@ export async function buildSpotifyAuthorizationUrl(
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("code_challenge", codeChallenge);
+
+  if (showDialog) {
+    url.searchParams.set("show_dialog", "true");
+  }
 
   if (state) {
     url.searchParams.set("state", state);

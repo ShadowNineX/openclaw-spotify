@@ -47,6 +47,7 @@ export async function startSpotifyOauthFlow(
     config,
     options.scopes ?? SPOTIFY_USER_SCOPES,
     state,
+    true,
   );
   const redirectUrl = new URL(auth.redirectUri);
 

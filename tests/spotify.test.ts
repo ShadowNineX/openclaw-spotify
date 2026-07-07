@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Queue, Track } from "@spotify/web-api-ts-sdk";
 
 import {
+  buildSpotifyAuthorizationUrl,
   canPersistSpotifyRefreshToken,
   getSpotifyUserClient,
   getSpotifyRefreshTokenPersistenceTarget,
@@ -26,6 +27,22 @@ describe("Spotify helpers", () => {
       ...SPOTIFY_PLAYBACK_SCOPES,
     ]);
     expect(new Set(SPOTIFY_USER_SCOPES).size).toBe(SPOTIFY_USER_SCOPES.length);
+  });
+
+  it("can force Spotify consent when building OAuth URLs", async () => {
+    const auth = await buildSpotifyAuthorizationUrl(
+      {
+        clientId: "client-id",
+        clientSecret: "client-secret",
+      },
+      SPOTIFY_USER_SCOPES,
+      "state",
+      true,
+    );
+    const url = new URL(auth.authorizationUrl);
+
+    expect(url.searchParams.get("show_dialog")).toBe("true");
+    expect(url.searchParams.get("scope")).toBe(SPOTIFY_USER_SCOPES.join(" "));
   });
 
   it("normalizes playable Spotify IDs, URIs, and URLs", () => {
