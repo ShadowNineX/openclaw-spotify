@@ -2,7 +2,7 @@
   "id": "spotify",
   "name": "Spotify",
   "description": "Spotify integration plugin for OpenClaw",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "activation": {
     "onStartup": true
   },
