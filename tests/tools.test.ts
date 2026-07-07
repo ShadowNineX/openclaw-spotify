@@ -9,8 +9,6 @@ const spotifyToolNames = [
   "spotify_get_artist",
   "spotify_get_album",
   "spotify_get_playlist",
-  "spotify_oauth_start",
-  "spotify_oauth_status",
   "spotify_list_my_playlists",
   "spotify_create_playlist",
   "spotify_update_playlist",

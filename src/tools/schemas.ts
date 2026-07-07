@@ -106,34 +106,6 @@ export const playlistSchema = Type.Object(
   { additionalProperties: false },
 );
 
-export const oauthStartSchema = Type.Object(
-  {
-    scopes: Type.Optional(
-      Type.Array(Type.String({ minLength: 1 }), {
-        description:
-          "Spotify OAuth scopes. Defaults to playlist read/write and playback scopes.",
-        minItems: 1,
-      }),
-    ),
-    state: Type.Optional(
-      Type.String({
-        description: "Optional OAuth state value.",
-      }),
-    ),
-    timeoutSeconds: Type.Optional(
-      Type.Integer({
-        description: "How long to keep the local callback server open.",
-        minimum: 30,
-        maximum: 900,
-        default: 300,
-      }),
-    ),
-  },
-  { additionalProperties: false },
-);
-
-export const oauthStatusSchema = Type.Object({}, { additionalProperties: false });
-
 export const myPlaylistsSchema = Type.Object(
   {
     limit: Type.Optional(limitSchema),

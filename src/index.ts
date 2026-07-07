@@ -22,7 +22,7 @@ export const spotifyConfigSchema = Type.Object(
     refreshToken: Type.Optional(
       Type.String({
         description:
-          "Spotify OAuth refresh token for user-library and playlist write tools. Falls back to SPOTIFY_REFRESH_TOKEN, then the token saved by spotify_oauth_start.",
+          "Spotify OAuth refresh token for user-library and playlist write tools. Falls back to SPOTIFY_REFRESH_TOKEN, then the token saved into OpenClaw config by `openclaw spotify auth login`.",
       }),
     ),
     redirectUri: Type.Optional(

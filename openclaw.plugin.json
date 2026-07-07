@@ -19,7 +19,7 @@
       },
       "refreshToken": {
         "type": "string",
-        "description": "Spotify OAuth refresh token for user-library and playlist write tools. Falls back to SPOTIFY_REFRESH_TOKEN, then the token saved by spotify_oauth_start."
+        "description": "Spotify OAuth refresh token for user-library and playlist write tools. Falls back to SPOTIFY_REFRESH_TOKEN, then the token saved into OpenClaw config by `openclaw spotify auth login`."
       },
       "redirectUri": {
         "type": "string",
@@ -56,8 +56,6 @@
       "spotify_get_artist",
       "spotify_get_album",
       "spotify_get_playlist",
-      "spotify_oauth_start",
-      "spotify_oauth_status",
       "spotify_list_my_playlists",
       "spotify_create_playlist",
       "spotify_update_playlist",

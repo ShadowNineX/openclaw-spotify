@@ -3,10 +3,6 @@ import { defineAlbumTool } from "./album";
 import { defineArtistTool } from "./artist";
 import { defineCreatePlaylistTool } from "./create-playlist";
 import { defineMyPlaylistsTool } from "./my-playlists";
-import {
-  defineOauthStartTool,
-  defineOauthStatusTool,
-} from "./oauth";
 import { definePlaybackTools } from "./playback";
 import { definePlaylistTool } from "./playlist";
 import { defineRemovePlaylistTracksTool } from "./remove-playlist-tracks";
@@ -22,8 +18,6 @@ export const defineSpotifyTools: SpotifyToolsBuilder = (tool) => [
   defineArtistTool(tool),
   defineAlbumTool(tool),
   definePlaylistTool(tool),
-  defineOauthStartTool(tool),
-  defineOauthStatusTool(tool),
   defineMyPlaylistsTool(tool),
   defineCreatePlaylistTool(tool),
   defineUpdatePlaylistTool(tool),

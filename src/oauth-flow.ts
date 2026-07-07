@@ -4,8 +4,10 @@ import {
   buildSpotifyAuthorizationUrl,
   canPersistSpotifyRefreshToken,
   exchangeSpotifyAuthorizationCode,
+  getSpotifyRefreshTokenPersistenceTarget,
   saveSpotifyRefreshToken,
   SPOTIFY_USER_SCOPES,
+  type SpotifyRefreshTokenPersistenceResult,
   type SpotifyRuntimeApi,
   type SpotifyPluginConfig,
 } from "./spotify";
@@ -18,9 +20,10 @@ type ActiveOauthFlow = {
 
 type CompletedOauthFlow = {
   completedAt: string;
+  error?: string;
   persisted: boolean;
-  refreshToken?: string;
   scope?: string;
+  storage: SpotifyRefreshTokenPersistenceResult["storage"];
 };
 
 let activeFlow: ActiveOauthFlow | undefined;
@@ -36,6 +39,7 @@ export async function startSpotifyOauthFlow(
   },
 ) {
   stopActiveFlow();
+  completedFlow = undefined;
 
   const state = options.state ?? crypto.randomUUID();
   const timeoutMs = clampTimeoutSeconds(options.timeoutSeconds) * 1000;
@@ -97,16 +101,19 @@ export async function startSpotifyOauthFlow(
         auth.codeVerifier,
         auth.redirectUri,
       );
-      const persisted = saveSpotifyRefreshToken(options.api, {
+      const persistencePromise: Promise<SpotifyRefreshTokenPersistenceResult> =
+        saveSpotifyRefreshToken(options.api, {
         refreshToken: token.refreshToken,
         scope: token.scope,
       });
+      const persistence = await persistencePromise;
 
       completedFlow = {
         completedAt: new Date().toISOString(),
-        persisted,
-        refreshToken: persisted ? undefined : token.refreshToken,
+        error: persistence.error,
+        persisted: persistence.persisted,
         scope: token.scope,
+        storage: persistence.storage,
       };
 
       writeHtml(
@@ -114,10 +121,7 @@ export async function startSpotifyOauthFlow(
         200,
         renderHtml(
           "Spotify OAuth complete",
-          persisted
-            ? "Refresh token saved to OpenClaw plugin state. You can close this page."
-            : "OpenClaw plugin state was unavailable, so copy this refresh token into plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN.",
-          persisted ? undefined : token.refreshToken,
+          getCompletionMessage(persistence),
         ),
       );
     } catch (error_) {
@@ -155,7 +159,7 @@ export async function startSpotifyOauthFlow(
     persistence: canPersistSpotifyRefreshToken(options.api)
       ? {
           enabled: true,
-          storage: "openclaw-plugin-state",
+          storage: getSpotifyRefreshTokenPersistenceTarget(options.api),
         }
       : {
           enabled: false,
@@ -170,6 +174,26 @@ export function getSpotifyOauthFlowStatus() {
     active: Boolean(activeFlow),
     completed: completedFlow,
   };
+}
+
+export async function waitForSpotifyOauthFlowCompletion(
+  timeoutSeconds = 300,
+): Promise<CompletedOauthFlow> {
+  const deadline = Date.now() + clampTimeoutSeconds(timeoutSeconds) * 1000;
+
+  while (Date.now() < deadline) {
+    if (completedFlow) {
+      return completedFlow;
+    }
+
+    if (!activeFlow) {
+      break;
+    }
+
+    await sleep(500);
+  }
+
+  throw new Error("Spotify OAuth login timed out before the callback finished.");
 }
 
 function stopActiveFlow(): void {
@@ -226,6 +250,31 @@ function renderHtml(
       ? `<textarea rows="6" cols="90" readonly>${escapeHtml(refreshToken)}</textarea>`
       : ""
   }</body></html>`;
+}
+
+function getCompletionMessage(
+  persistence: SpotifyRefreshTokenPersistenceResult,
+): string {
+  if (persistence.storage === "openclaw-config" && persistence.persisted) {
+    return "Refresh token saved to OpenClaw config. You can close this page.";
+  }
+
+  if (
+    persistence.storage === "openclaw-plugin-state" &&
+    persistence.persisted
+  ) {
+    return "Refresh token saved to OpenClaw plugin state. You can close this page.";
+  }
+
+  const reason = persistence.error ? ` Reason: ${persistence.error}` : "";
+
+  return `Automatic token save failed, so no token was displayed. Fix OpenClaw config write access and run the Spotify OAuth login command again.${reason}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function escapeHtml(value: string): string {

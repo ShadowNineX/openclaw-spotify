@@ -6,6 +6,7 @@ import {
   SPOTIFY_PLUGIN_NAME,
   spotifyConfigSchema,
 } from "./src/index";
+import { registerSpotifyCli } from "./src/cli";
 import { defineSpotifyTools } from "./src/tools/index";
 
 const entry = defineToolPlugin({
@@ -15,5 +16,33 @@ const entry = defineToolPlugin({
   configSchema: spotifyConfigSchema,
   tools: defineSpotifyTools,
 });
+const registerTools = entry.register;
+
+entry.register = (api) => {
+  api.registerCli(
+    ({ config, program }) => {
+      registerSpotifyCli({
+        api,
+        config,
+        program,
+      });
+    },
+    {
+      descriptors: [
+        {
+          name: "spotify",
+          description: "Manage the OpenClaw Spotify plugin",
+          hasSubcommands: true,
+        },
+      ],
+    },
+  );
+
+  if (api.registrationMode === "cli-metadata") {
+    return;
+  }
+
+  registerTools(api);
+};
 
 export default entry;

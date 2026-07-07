@@ -14,9 +14,10 @@ Plain OpenClaw plugin for Spotify catalog integrations.
 ## Config
 
 The read-only catalog tools use Spotify Client Credentials. Playlist management
-tools also need a Spotify OAuth refresh token. Configure either OpenClaw plugin
-config. The refresh token is normally saved automatically by `spotify_oauth_start`,
-so it only needs to be configured manually as a fallback:
+and playback tools also need a Spotify OAuth refresh token. Configure OpenClaw
+plugin config with your Spotify app credentials. The refresh token is normally
+saved automatically by the plugin CLI command, so it only needs to be configured
+manually as a fallback:
 
 ```json
 {
@@ -43,12 +44,23 @@ SPOTIFY_CLIENT_SECRET=your-client-secret
 ```
 
 For first-time OAuth setup, add `http://127.0.0.1:4377/callback` to your
-Spotify app settings, run `spotify_oauth_start`, open the returned
-authorization URL, and the callback saves the refresh token into OpenClaw plugin
-state. If plugin state is unavailable, the callback page shows the refresh token
-so you can set `plugins.entries.spotify.config.refreshToken` or
-`SPOTIFY_REFRESH_TOKEN` manually. Set `redirectUri` or `SPOTIFY_REDIRECT_URI`
-only if you want to use a different localhost callback.
+Spotify app settings and run this on the machine where OpenClaw runs:
+
+```bash
+openclaw spotify auth login
+```
+
+If OpenClaw runs on a VPS, use an SSH port forward from your local browser
+machine before opening the authorization URL:
+
+```bash
+ssh -L 4377:127.0.0.1:4377 user@your-vps
+```
+
+The command prints the Spotify authorization URL, waits for the callback, and
+saves the refresh token into OpenClaw config. It does not expose the refresh
+token in chat or on the callback page. Set `redirectUri` or
+`SPOTIFY_REDIRECT_URI` only if you want to use a different localhost callback.
 
 ## Tools
 
@@ -57,8 +69,6 @@ only if you want to use a different localhost callback.
 - `spotify_get_artist`: get artist metadata and optional top tracks.
 - `spotify_get_album`: get album metadata and optional tracks.
 - `spotify_get_playlist`: get public playlist metadata and tracks.
-- `spotify_oauth_start`: start a local OAuth callback flow.
-- `spotify_oauth_status`: check the local OAuth callback flow.
 - `spotify_list_my_playlists`: list the authorized user's playlists.
 - `spotify_create_playlist`: create a playlist.
 - `spotify_update_playlist`: update playlist details.

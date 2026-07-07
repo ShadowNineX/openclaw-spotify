@@ -49,13 +49,29 @@ export type SpotifyOAuthTokenRecord = {
   savedAt: string;
 };
 
+export type SpotifyRefreshTokenPersistenceResult = {
+  persisted: boolean;
+  storage: "openclaw-config" | "openclaw-plugin-state" | "manual-config-or-env";
+  error?: string;
+};
+
 type SpotifyTokenStore<T> = {
   register(key: string, value: T): void;
   lookup(key: string): T | undefined;
 };
 
+type MutableRecord = Record<string, unknown>;
+
 export type SpotifyRuntimeApi = {
   runtime?: {
+    config?: {
+      mutateConfigFile?: <T>(options: {
+        afterWrite: {
+          mode: "auto";
+        };
+        mutate: (draft: MutableRecord) => T | Promise<T>;
+      }) => Promise<unknown>;
+    };
     state?: {
       openSyncKeyedStore?: <T>(options: {
         namespace: string;
@@ -109,6 +125,7 @@ let cachedUserClient:
       sdk: SpotifyApi;
     }
   | undefined;
+let lastSavedRefreshToken: string | undefined;
 
 export const SPOTIFY_PLAYLIST_SCOPES = [
   "playlist-read-private",
@@ -176,17 +193,58 @@ export function getSpotifyUserClient(
 }
 
 export function canPersistSpotifyRefreshToken(api?: SpotifyRuntimeApi): boolean {
-  return Boolean(openSpotifyOAuthStore(api));
+  return getSpotifyRefreshTokenPersistenceTarget(api) !==
+    "manual-config-or-env";
 }
 
-export function saveSpotifyRefreshToken(
+export function getSpotifyRefreshTokenPersistenceTarget(
+  api?: SpotifyRuntimeApi,
+): SpotifyRefreshTokenPersistenceResult["storage"] {
+  if (api?.runtime?.config?.mutateConfigFile) {
+    return "openclaw-config";
+  }
+
+  if (openSpotifyOAuthStore(api)) {
+    return "openclaw-plugin-state";
+  }
+
+  return "manual-config-or-env";
+}
+
+export async function saveSpotifyRefreshToken(
   api: SpotifyRuntimeApi | undefined,
   token: Omit<SpotifyOAuthTokenRecord, "savedAt">,
-): boolean {
+): Promise<SpotifyRefreshTokenPersistenceResult> {
+  const configResult = await saveSpotifyRefreshTokenToConfig(api, token);
+
+  if (configResult.persisted) {
+    return configResult;
+  }
+
+  const stateResult = saveSpotifyRefreshTokenToState(api, token);
+
+  if (stateResult.persisted) {
+    return stateResult;
+  }
+
+  return {
+    persisted: false,
+    storage: "manual-config-or-env",
+    error: configResult.error ?? stateResult.error,
+  };
+}
+
+function saveSpotifyRefreshTokenToState(
+  api: SpotifyRuntimeApi | undefined,
+  token: Omit<SpotifyOAuthTokenRecord, "savedAt">,
+): SpotifyRefreshTokenPersistenceResult {
   const store = openSpotifyOAuthStore(api);
 
   if (!store) {
-    return false;
+    return {
+      persisted: false,
+      storage: "manual-config-or-env",
+    };
   }
 
   try {
@@ -194,10 +252,65 @@ export function saveSpotifyRefreshToken(
       ...token,
       savedAt: new Date().toISOString(),
     });
+    lastSavedRefreshToken = token.refreshToken;
     cachedUserClient = undefined;
-    return true;
-  } catch {
-    return false;
+    return {
+      persisted: true,
+      storage: "openclaw-plugin-state",
+    };
+  } catch (error) {
+    return {
+      persisted: false,
+      storage: "manual-config-or-env",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function saveSpotifyRefreshTokenToConfig(
+  api: SpotifyRuntimeApi | undefined,
+  token: Omit<SpotifyOAuthTokenRecord, "savedAt">,
+): Promise<SpotifyRefreshTokenPersistenceResult> {
+  const mutateConfigFile = api?.runtime?.config?.mutateConfigFile;
+
+  if (!mutateConfigFile) {
+    return {
+      persisted: false,
+      storage: "manual-config-or-env",
+    };
+  }
+
+  try {
+    await mutateConfigFile({
+      afterWrite: {
+        mode: "auto",
+      },
+      mutate: (draft) => {
+        const plugins = ensureRecord(draft, "plugins");
+        const entries = ensureRecord(plugins, "entries");
+        const spotify = ensureRecord(entries, "spotify");
+        const config = ensureRecord(spotify, "config");
+
+        if (spotify.enabled === undefined) {
+          spotify.enabled = true;
+        }
+
+        config.refreshToken = token.refreshToken;
+      },
+    });
+
+    lastSavedRefreshToken = token.refreshToken;
+    cachedUserClient = undefined;
+    return {
+      persisted: true,
+      storage: "openclaw-config",
+    };
+  } catch (error) {
+    return {
+      persisted: false,
+      storage: "manual-config-or-env",
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
@@ -576,15 +689,35 @@ function resolveSpotifyRefreshToken(
     return refreshToken;
   }
 
+  if (lastSavedRefreshToken) {
+    return lastSavedRefreshToken;
+  }
+
   const storedToken = readStoredSpotifyRefreshToken(api);
 
   if (!storedToken) {
     throw new Error(
-      "Spotify OAuth refresh token is missing. Run spotify_oauth_start once, or set plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN.",
+      "Spotify OAuth refresh token is missing. Run `openclaw spotify auth login` on the OpenClaw host, or set plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN.",
     );
   }
 
   return storedToken;
+}
+
+function ensureRecord(parent: MutableRecord, key: string): MutableRecord {
+  const value = parent[key];
+
+  if (isMutableRecord(value)) {
+    return value;
+  }
+
+  const next: MutableRecord = {};
+  parent[key] = next;
+  return next;
+}
+
+function isMutableRecord(value: unknown): value is MutableRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function resolveSpotifyRedirectUri(config: SpotifyPluginConfig): string {

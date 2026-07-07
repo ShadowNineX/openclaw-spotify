@@ -3,6 +3,7 @@ import type { Queue, Track } from "@spotify/web-api-ts-sdk";
 
 import {
   canPersistSpotifyRefreshToken,
+  getSpotifyRefreshTokenPersistenceTarget,
   normalizeSpotifyContextUri,
   normalizeSpotifyPlayableUri,
   saveSpotifyRefreshToken,
@@ -111,7 +112,46 @@ describe("Spotify helpers", () => {
     });
   });
 
-  it("saves refresh tokens into OpenClaw plugin state when available", () => {
+  it("saves refresh tokens into OpenClaw config when available", async () => {
+    const draft: Record<string, unknown> = {};
+    const api: SpotifyRuntimeApi = {
+      runtime: {
+        config: {
+          mutateConfigFile: async ({ mutate }) => {
+            await mutate(draft);
+          },
+        },
+      },
+    };
+
+    expect(canPersistSpotifyRefreshToken(api)).toBe(true);
+    expect(getSpotifyRefreshTokenPersistenceTarget(api)).toBe(
+      "openclaw-config",
+    );
+    await expect(
+      saveSpotifyRefreshToken(api, {
+        refreshToken: "refresh-token",
+        scope: "playlist-read-private",
+      }),
+    ).resolves.toEqual({
+      persisted: true,
+      storage: "openclaw-config",
+    });
+    expect(draft).toEqual({
+      plugins: {
+        entries: {
+          spotify: {
+            enabled: true,
+            config: {
+              refreshToken: "refresh-token",
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it("saves refresh tokens into OpenClaw plugin state as a fallback", async () => {
     const records = new Map<string, SpotifyOAuthTokenRecord>();
     const api: SpotifyRuntimeApi = {
       runtime: {
@@ -127,12 +167,18 @@ describe("Spotify helpers", () => {
     };
 
     expect(canPersistSpotifyRefreshToken(api)).toBe(true);
-    expect(
+    expect(getSpotifyRefreshTokenPersistenceTarget(api)).toBe(
+      "openclaw-plugin-state",
+    );
+    await expect(
       saveSpotifyRefreshToken(api, {
         refreshToken: "refresh-token",
         scope: "playlist-read-private",
       }),
-    ).toBe(true);
+    ).resolves.toEqual({
+      persisted: true,
+      storage: "openclaw-plugin-state",
+    });
     expect(records.get("user-refresh-token")).toMatchObject({
       refreshToken: "refresh-token",
       scope: "playlist-read-private",
@@ -142,13 +188,20 @@ describe("Spotify helpers", () => {
     );
   });
 
-  it("reports unavailable token persistence without a runtime state store", () => {
+  it("reports unavailable token persistence without runtime storage", async () => {
     expect(canPersistSpotifyRefreshToken()).toBe(false);
-    expect(
+    expect(getSpotifyRefreshTokenPersistenceTarget()).toBe(
+      "manual-config-or-env",
+    );
+    await expect(
       saveSpotifyRefreshToken(undefined, {
         refreshToken: "refresh-token",
       }),
-    ).toBe(false);
+    ).resolves.toEqual({
+      persisted: false,
+      storage: "manual-config-or-env",
+      error: undefined,
+    });
   });
 });
 
