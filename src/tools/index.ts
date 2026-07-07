@@ -12,6 +12,7 @@ import { defineSearchTool } from "./search";
 import { defineTrackTool } from "./track";
 import type { SpotifyToolsBuilder } from "./types";
 import { defineUpdatePlaylistTool } from "./update-playlist";
+import { defineUploadPlaylistCoverTool } from "./upload-playlist-cover";
 
 export const defineSpotifyTools: SpotifyToolsBuilder = (tool) => [
   defineSearchTool(tool),
@@ -26,5 +27,6 @@ export const defineSpotifyTools: SpotifyToolsBuilder = (tool) => [
   defineAddPlaylistTracksTool(tool),
   defineRemovePlaylistTracksTool(tool),
   defineReorderPlaylistTracksTool(tool),
+  defineUploadPlaylistCoverTool(tool),
   ...definePlaybackTools(tool),
 ];
