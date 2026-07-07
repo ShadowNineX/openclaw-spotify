@@ -9,6 +9,7 @@ Plain OpenClaw plugin for Spotify catalog integrations.
 - `src/index.ts` keeps the shared plugin identity and config schema.
 - `src/tools/` declares the OpenClaw tools.
 - `src/spotify.ts` wraps the Spotify SDK and response shaping.
+- `skills/spotify/SKILL.md` teaches OpenClaw when and how to use the tools.
 
 ## Config
 
