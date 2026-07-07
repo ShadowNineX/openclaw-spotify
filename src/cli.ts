@@ -37,7 +37,7 @@ export function registerSpotifyCli({
 
   auth
     .command("login")
-    .description("Start Spotify OAuth and save the refresh token to OpenClaw config")
+    .description("Start Spotify OAuth and save the refresh token to OpenClaw")
     .option(
       "--timeout <seconds>",
       "How long to keep the local callback server open",
@@ -79,7 +79,7 @@ async function runSpotifyAuthLogin(
 
   if (!completed.persisted) {
     throw new Error(
-      `Spotify OAuth completed, but the refresh token could not be saved to OpenClaw config: ${completed.error ?? "unknown error"}`,
+      `Spotify OAuth completed, but the refresh token could not be saved to OpenClaw: ${completed.error ?? "unknown error"}`,
     );
   }
 
