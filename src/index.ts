@@ -1,9 +1,14 @@
-import { Type } from "typebox";
+import { Type, type Static } from "typebox";
 
 export const SPOTIFY_PLUGIN_ID = "spotify";
 export const SPOTIFY_PLUGIN_NAME = "Spotify";
 export const SPOTIFY_PLUGIN_DESCRIPTION =
   "Spotify integration plugin for OpenClaw";
+
+const playlistApprovalDecisionSchema = Type.Union([
+  Type.Literal("prompt"),
+  Type.Literal("allow"),
+]);
 
 export const spotifyConfigSchema = Type.Object(
   {
@@ -39,6 +44,23 @@ export const spotifyConfigSchema = Type.Object(
         maxLength: 2,
       }),
     ),
+    playlistApprovals: Type.Optional(
+      Type.Object(
+        {
+          update: Type.Optional(playlistApprovalDecisionSchema),
+          removeTracks: Type.Optional(playlistApprovalDecisionSchema),
+          reorderTracks: Type.Optional(playlistApprovalDecisionSchema),
+          delete: Type.Optional(playlistApprovalDecisionSchema),
+        },
+        {
+          additionalProperties: false,
+          description:
+            "Per-action Spotify playlist approval policy. Each action defaults to prompt; set an action to allow to run it without plugin approval.",
+        },
+      ),
+    ),
   },
   { additionalProperties: false },
 );
+
+export type SpotifyPluginConfig = Static<typeof spotifyConfigSchema>;

@@ -18,6 +18,7 @@ import type {
   SimplifiedTrack,
   Track,
   TrackItem,
+  IAuthStrategy,
 } from "@spotify/web-api-ts-sdk";
 
 export const SPOTIFY_SEARCH_TYPES = [
@@ -38,7 +39,7 @@ export type SpotifyPluginConfig = {
   refreshToken?: unknown;
 };
 
-type SpotifyCredentials = {
+export type SpotifyCredentials = {
   clientId: string;
   clientSecret: string;
 };
@@ -173,20 +174,15 @@ export function getSpotifyUserClient(
 ): SpotifyApi {
   const credentials = resolveSpotifyCredentials(config);
   const refreshToken = resolveSpotifyRefreshToken(config, api);
-  const cacheKey = `${credentials.clientId}:${refreshToken}`;
+  const cacheKey = `${credentials.clientId}:${credentials.clientSecret}:${refreshToken}`;
 
   if (cachedUserClient?.cacheKey === cacheKey) {
     return cachedUserClient.sdk;
   }
 
-  const token: AccessToken = {
-    access_token: "",
-    token_type: "Bearer",
-    expires_in: 0,
-    refresh_token: refreshToken,
-    expires: 0,
-  };
-  const sdk = SpotifyApi.withAccessToken(credentials.clientId, token);
+  const sdk = new SpotifyApi(
+    new SpotifyRefreshTokenAuthStrategy(credentials, refreshToken),
+  );
 
   cachedUserClient = { cacheKey, sdk };
   return sdk;
@@ -674,6 +670,77 @@ function resolveSpotifyCredentials(
   }
 
   return { clientId, clientSecret };
+}
+
+class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
+  private accessToken: AccessToken | null = null;
+
+  constructor(
+    private readonly credentials: SpotifyCredentials,
+    private readonly refreshToken: string,
+  ) {}
+
+  setConfiguration(): void {}
+
+  async getOrCreateAccessToken(): Promise<AccessToken> {
+    if (
+      this.accessToken &&
+      (this.accessToken.expires ?? 0) > Date.now() + 60_000
+    ) {
+      return this.accessToken;
+    }
+
+    this.accessToken = await refreshSpotifyAccessToken(
+      this.credentials,
+      this.refreshToken,
+    );
+    return this.accessToken;
+  }
+
+  async getAccessToken(): Promise<AccessToken | null> {
+    return this.accessToken;
+  }
+
+  removeAccessToken(): void {
+    this.accessToken = null;
+  }
+}
+
+export async function refreshSpotifyAccessToken(
+  credentials: SpotifyCredentials,
+  refreshToken: string,
+): Promise<AccessToken> {
+  const body = new URLSearchParams({
+    client_id: credentials.clientId,
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  });
+  const response = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Spotify access token refresh failed: ${text}`);
+  }
+
+  const token = JSON.parse(text) as Partial<AccessToken>;
+
+  if (!token.access_token || !token.expires_in) {
+    throw new Error("Spotify access token refresh returned an invalid token.");
+  }
+
+  return {
+    access_token: token.access_token,
+    token_type: token.token_type ?? "Bearer",
+    expires_in: token.expires_in,
+    refresh_token: token.refresh_token ?? refreshToken,
+    expires: Date.now() + token.expires_in * 1000,
+  };
 }
 
 function resolveSpotifyRefreshToken(

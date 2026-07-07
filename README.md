@@ -28,7 +28,13 @@ manually as a fallback:
         "config": {
           "clientId": "your-client-id",
           "clientSecret": "your-client-secret",
-          "market": "US"
+          "market": "US",
+          "playlistApprovals": {
+            "update": "prompt",
+            "removeTracks": "prompt",
+            "reorderTracks": "prompt",
+            "delete": "prompt"
+          }
         }
       }
     }
@@ -72,6 +78,7 @@ token in chat or on the callback page. Set `redirectUri` or
 - `spotify_list_my_playlists`: list the authorized user's playlists.
 - `spotify_create_playlist`: create a playlist.
 - `spotify_update_playlist`: update playlist details.
+- `spotify_delete_playlist`: delete or remove a playlist from the authorized user's library.
 - `spotify_add_playlist_tracks`: add tracks to a playlist.
 - `spotify_remove_playlist_tracks`: remove tracks from a playlist.
 - `spotify_reorder_playlist_tracks`: reorder tracks in a playlist.
@@ -89,6 +96,36 @@ token in chat or on the callback page. Set `redirectUri` or
 - `spotify_set_volume`: set volume.
 - `spotify_set_shuffle`: enable or disable shuffle.
 - `spotify_add_to_queue`: add a track or episode to the queue.
+
+Playlist edit/delete tools request an OpenClaw plugin approval before they run.
+Adding tracks and creating playlists do not prompt. Destructive actions like
+removing tracks or deleting a playlist are marked critical and only offer
+approve-once or deny. On headless/server setups, route plugin approvals with
+`approvals.plugin`; this is separate from exec approvals.
+The approval hook fetches the playlist name from Spotify before prompting when
+OAuth is configured, and falls back to the playlist ID if lookup is unavailable.
+
+Each protected playlist action is configurable. Set an action to `"allow"` if it
+should run without a plugin approval prompt:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "spotify": {
+        "config": {
+          "playlistApprovals": {
+            "update": "allow",
+            "removeTracks": "prompt",
+            "reorderTracks": "allow",
+            "delete": "prompt"
+          }
+        }
+      }
+    }
+  }
+}
+```
 
 ## Check
 

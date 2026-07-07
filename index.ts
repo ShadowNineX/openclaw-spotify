@@ -6,6 +6,7 @@ import {
   SPOTIFY_PLUGIN_NAME,
   spotifyConfigSchema,
 } from "./src/index";
+import { registerSpotifyApprovalPolicy } from "./src/approval-policy";
 import { registerSpotifyCli } from "./src/cli";
 import { defineSpotifyTools } from "./src/tools/index";
 
@@ -42,6 +43,7 @@ entry.register = (api) => {
     return;
   }
 
+  registerSpotifyApprovalPolicy(api);
   registerTools(api);
 };
 

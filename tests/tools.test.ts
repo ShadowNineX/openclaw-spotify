@@ -2,6 +2,7 @@ import { getToolPluginMetadata } from "openclaw/plugin-sdk/tool-plugin";
 import { describe, expect, it } from "vitest";
 
 import entry from "../index";
+import { buildSpotifyToolApproval } from "../src/approval-policy";
 
 const spotifyToolNames = [
   "spotify_search",
@@ -12,6 +13,7 @@ const spotifyToolNames = [
   "spotify_list_my_playlists",
   "spotify_create_playlist",
   "spotify_update_playlist",
+  "spotify_delete_playlist",
   "spotify_add_playlist_tracks",
   "spotify_remove_playlist_tracks",
   "spotify_reorder_playlist_tracks",
@@ -89,6 +91,189 @@ describe("Spotify tool plugin metadata", () => {
           minimum: 0,
           maximum: 100,
         },
+      },
+    });
+  });
+
+  it("requires approval before destructive playlist mutations", async () => {
+    expect(
+      await buildSpotifyToolApproval({
+        toolName: "spotify_delete_playlist",
+        params: {
+          id: "playlist-1",
+        },
+      }),
+    ).toEqual({
+      requireApproval: {
+        title: "Delete Spotify playlist",
+        description:
+          "Delete playlist playlist-1 from the authorized user's library.",
+        severity: "critical",
+        allowedDecisions: ["allow-once", "deny"],
+        timeoutMs: 120_000,
+        timeoutBehavior: "deny",
+      },
+    });
+  });
+
+  it("fetches playlist names before building approval prompts", async () => {
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = (async (url, init) => {
+      const href = url instanceof Request ? url.url : String(url);
+
+      if (href === "https://accounts.spotify.com/api/token") {
+        expect(init?.method).toBe("POST");
+
+        return new Response(
+          JSON.stringify({
+            access_token: "access-token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (href.includes("https://api.spotify.com/v1/playlists/playlist-1")) {
+        return new Response(
+          JSON.stringify({
+            collaborative: false,
+            description: "",
+            external_urls: {
+              spotify: "https://open.spotify.com/playlist/playlist-1",
+            },
+            followers: {
+              total: 0,
+            },
+            href: href,
+            id: "playlist-1",
+            images: [],
+            name: "Road trip",
+            owner: {
+              display_name: "Me",
+              external_urls: {
+                spotify: "https://open.spotify.com/user/me",
+              },
+              href: "https://api.spotify.com/v1/users/me",
+              id: "me",
+              type: "user",
+              uri: "spotify:user:me",
+            },
+            public: false,
+            snapshot_id: "snapshot-1",
+            tracks: {
+              href: `${href}/tracks`,
+              total: 0,
+            },
+            type: "playlist",
+            uri: "spotify:playlist:playlist-1",
+          }),
+          { status: 200 },
+        );
+      }
+
+      return new Response("Unexpected test request", { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      await expect(
+        buildSpotifyToolApproval({
+          context: {
+            pluginConfig: {
+              clientId: "client-id",
+              clientSecret: "client-secret",
+              refreshToken: "refresh-token",
+            },
+          },
+          toolName: "spotify_delete_playlist",
+          params: {
+            id: "playlist-1",
+          },
+        }),
+      ).resolves.toMatchObject({
+        requireApproval: {
+          description:
+            'Delete playlist "Road trip" (id: playlist-1) from the authorized user\'s library.',
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does not require approval before additive playlist changes", async () => {
+    expect(
+      await buildSpotifyToolApproval({
+        toolName: "spotify_add_playlist_tracks",
+        params: {
+          id: "playlist-1",
+          uris: ["spotify:track:track-1"],
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      await buildSpotifyToolApproval({
+        toolName: "spotify_create_playlist",
+        params: {
+          name: "Road trip",
+        },
+      }),
+    ).toBeUndefined();
+  });
+
+  it("falls back to playlist IDs when no display name is available", async () => {
+    expect(
+      await buildSpotifyToolApproval({
+        toolName: "spotify_remove_playlist_tracks",
+        params: {
+          id: "playlist-1",
+          uris: ["spotify:track:track-1"],
+        },
+      }),
+    ).toMatchObject({
+      requireApproval: {
+        description: "Remove 1 track(s) from playlist playlist-1.",
+      },
+    });
+  });
+
+  it("lets operators configure Spotify playlist approvals per action", async () => {
+    expect(
+      await buildSpotifyToolApproval({
+        context: {
+          pluginConfig: {
+            playlistApprovals: {
+              update: "allow",
+              delete: "prompt",
+            },
+          },
+        },
+        toolName: "spotify_update_playlist",
+        params: {
+          id: "playlist-1",
+        },
+      }),
+    ).toBeUndefined();
+
+    expect(
+      await buildSpotifyToolApproval({
+        context: {
+          pluginConfig: {
+            playlistApprovals: {
+              update: "allow",
+              delete: "prompt",
+            },
+          },
+        },
+        toolName: "spotify_delete_playlist",
+        params: {
+          id: "playlist-1",
+        },
+      }),
+    ).toMatchObject({
+      requireApproval: {
+        title: "Delete Spotify playlist",
       },
     });
   });

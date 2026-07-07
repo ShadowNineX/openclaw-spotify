@@ -2,6 +2,7 @@ import { defineAddPlaylistTracksTool } from "./add-playlist-tracks";
 import { defineAlbumTool } from "./album";
 import { defineArtistTool } from "./artist";
 import { defineCreatePlaylistTool } from "./create-playlist";
+import { defineDeletePlaylistTool } from "./delete-playlist";
 import { defineMyPlaylistsTool } from "./my-playlists";
 import { definePlaybackTools } from "./playback";
 import { definePlaylistTool } from "./playlist";
@@ -21,6 +22,7 @@ export const defineSpotifyTools: SpotifyToolsBuilder = (tool) => [
   defineMyPlaylistsTool(tool),
   defineCreatePlaylistTool(tool),
   defineUpdatePlaylistTool(tool),
+  defineDeletePlaylistTool(tool),
   defineAddPlaylistTracksTool(tool),
   defineRemovePlaylistTracksTool(tool),
   defineReorderPlaylistTracksTool(tool),

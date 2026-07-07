@@ -172,6 +172,16 @@ export const updatePlaylistSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const deletePlaylistSchema = Type.Object(
+  {
+    id: Type.String({
+      description: "Spotify playlist ID.",
+      minLength: 1,
+    }),
+  },
+  { additionalProperties: false },
+);
+
 export const playlistTracksEditSchema = Type.Object(
   {
     id: Type.String({

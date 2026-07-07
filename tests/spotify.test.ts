@@ -6,6 +6,7 @@ import {
   getSpotifyRefreshTokenPersistenceTarget,
   normalizeSpotifyContextUri,
   normalizeSpotifyPlayableUri,
+  refreshSpotifyAccessToken,
   saveSpotifyRefreshToken,
   SPOTIFY_PLAYBACK_SCOPES,
   SPOTIFY_PLAYLIST_SCOPES,
@@ -202,6 +203,63 @@ describe("Spotify helpers", () => {
       storage: "manual-config-or-env",
       error: undefined,
     });
+  });
+
+  it("refreshes OAuth access tokens before user API calls need them", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: Array<{
+      body: string;
+      headers: unknown;
+      method: string | undefined;
+      url: string | URL | Request;
+    }> = [];
+
+    globalThis.fetch = (async (url, init) => {
+      requests.push({
+        body: String(init?.body),
+        headers: init?.headers,
+        method: init?.method,
+        url,
+      });
+
+      return new Response(
+        JSON.stringify({
+          access_token: "access-token",
+          expires_in: 3600,
+          token_type: "Bearer",
+        }),
+        {
+          status: 200,
+        },
+      );
+    }) as typeof fetch;
+
+    try {
+      await expect(
+        refreshSpotifyAccessToken(
+          {
+            clientId: "client-id",
+            clientSecret: "client-secret",
+          },
+          "refresh-token",
+        ),
+      ).resolves.toMatchObject({
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+        token_type: "Bearer",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      method: "POST",
+      url: "https://accounts.spotify.com/api/token",
+    });
+    expect(requests[0]?.body).toContain("grant_type=refresh_token");
+    expect(requests[0]?.body).toContain("refresh_token=refresh-token");
+    expect(requests[0]?.body).toContain("client_id=client-id");
   });
 });
 
