@@ -74,6 +74,10 @@ type SpotifyRefreshTokenCandidate = {
   source: SpotifyRefreshTokenSource;
 };
 
+type SpotifyRefreshTokenRotationHandler = (
+  refreshToken: string,
+) => Promise<void>;
+
 export type SpotifyRuntimeApi = {
   runtime?: {
     config?: {
@@ -196,7 +200,11 @@ export function getSpotifyUserClient(
   }
 
   const sdk = new SpotifyApi(
-    new SpotifyRefreshTokenAuthStrategy(credentials, refreshTokens),
+    new SpotifyRefreshTokenAuthStrategy(credentials, refreshTokens, async (
+      refreshToken,
+    ) => {
+      await saveSpotifyRefreshToken(api, { refreshToken });
+    }),
   );
 
   cachedUserClient = { cacheKey, sdk };
@@ -703,6 +711,9 @@ class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
   constructor(
     private readonly credentials: SpotifyCredentials,
     private readonly refreshTokens: readonly SpotifyRefreshTokenCandidate[],
+    private readonly onRefreshTokenRotated:
+      | SpotifyRefreshTokenRotationHandler
+      | undefined,
   ) {}
 
   setConfiguration(configuration: SdkConfiguration): void {
@@ -721,6 +732,7 @@ class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
       this.credentials,
       this.refreshTokens,
       this.configuration?.fetch,
+      this.onRefreshTokenRotated,
     );
     return this.accessToken;
   }
@@ -782,16 +794,23 @@ async function refreshSpotifyAccessTokenFromCandidates(
   credentials: SpotifyCredentials,
   refreshTokens: readonly SpotifyRefreshTokenCandidate[],
   fetchImplementation: SdkConfiguration["fetch"] = fetch,
+  onRefreshTokenRotated?: SpotifyRefreshTokenRotationHandler,
 ): Promise<AccessToken> {
   let invalidGrantError: unknown;
 
   for (const candidate of refreshTokens) {
     try {
-      return await refreshSpotifyAccessToken(
+      const accessToken = await refreshSpotifyAccessToken(
         credentials,
         candidate.refreshToken,
         fetchImplementation,
       );
+
+      if (accessToken.refresh_token !== candidate.refreshToken) {
+        await onRefreshTokenRotated?.(accessToken.refresh_token);
+      }
+
+      return accessToken;
     } catch (error) {
       if (!isInvalidGrantError(error)) {
         throw error;

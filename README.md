@@ -70,7 +70,8 @@ token in chat or on the callback page. Set `redirectUri` or
 Tokens saved by `openclaw spotify auth login` are preferred over manual
 `refreshToken` or `SPOTIFY_REFRESH_TOKEN` values. If Spotify reports a saved
 token as revoked, the plugin tries the next configured token source before
-failing.
+failing. When Spotify rotates a refresh token during an API token refresh, the
+plugin saves the replacement token back to OpenClaw automatically.
 
 ## Tools
 

@@ -318,6 +318,92 @@ describe("Spotify helpers", () => {
     expect(requests[0]).toContain("refresh_token=fresh-login-token");
   });
 
+  it("persists rotated refresh tokens returned by Spotify", async () => {
+    const originalFetch = globalThis.fetch;
+    const records = new Map<string, SpotifyOAuthTokenRecord>();
+    const api: SpotifyRuntimeApi = {
+      runtime: {
+        state: {
+          openSyncKeyedStore: <T>() => ({
+            lookup: (key: string) => records.get(key) as T | undefined,
+            register: (key: string, value: T) => {
+              records.set(key, value as SpotifyOAuthTokenRecord);
+            },
+          }),
+        },
+      },
+    };
+
+    await saveSpotifyRefreshToken(api, {
+      refreshToken: "old-rotating-token",
+    });
+
+    globalThis.fetch = (async (url) => {
+      const href = url instanceof Request ? url.url : String(url);
+
+      if (href === "https://accounts.spotify.com/api/token") {
+        return new Response(
+          JSON.stringify({
+            access_token: "access-token",
+            expires_in: 3600,
+            refresh_token: "rotated-token",
+            token_type: "Bearer",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (href === "https://api.spotify.com/v1/me") {
+        return new Response(
+          JSON.stringify({
+            country: "US",
+            display_name: "Me",
+            email: "me@example.com",
+            explicit_content: {
+              filter_enabled: false,
+              filter_locked: false,
+            },
+            external_urls: {
+              spotify: "https://open.spotify.com/user/me",
+            },
+            followers: {
+              total: 0,
+            },
+            href: href,
+            id: "me",
+            images: [],
+            product: "premium",
+            type: "user",
+            uri: "spotify:user:me",
+          }),
+          { status: 200 },
+        );
+      }
+
+      return new Response("Unexpected test request", { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const sdk = getSpotifyUserClient(
+        {
+          clientId: "rotating-client-id",
+          clientSecret: "rotating-client-secret",
+        },
+        api,
+      );
+
+      await expect(sdk.currentUser.profile()).resolves.toMatchObject({
+        id: "me",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(records.get("user-refresh-token")).toMatchObject({
+      refreshToken: "rotated-token",
+    });
+  });
+
   it("refreshes OAuth access tokens before user API calls need them", async () => {
     const originalFetch = globalThis.fetch;
     const requests: Array<{
