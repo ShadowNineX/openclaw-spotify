@@ -19,6 +19,7 @@ import type {
   Track,
   TrackItem,
   IAuthStrategy,
+  SdkConfiguration,
 } from "@spotify/web-api-ts-sdk";
 
 export const SPOTIFY_SEARCH_TYPES = [
@@ -62,6 +63,16 @@ type SpotifyTokenStore<T> = {
 };
 
 type MutableRecord = Record<string, unknown>;
+type SpotifyRefreshTokenSource =
+  | "last-oauth-login"
+  | "openclaw-plugin-state"
+  | "openclaw-config"
+  | "environment";
+
+type SpotifyRefreshTokenCandidate = {
+  refreshToken: string;
+  source: SpotifyRefreshTokenSource;
+};
 
 export type SpotifyRuntimeApi = {
   runtime?: {
@@ -173,15 +184,19 @@ export function getSpotifyUserClient(
   api?: SpotifyRuntimeApi,
 ): SpotifyApi {
   const credentials = resolveSpotifyCredentials(config);
-  const refreshToken = resolveSpotifyRefreshToken(config, api);
-  const cacheKey = `${credentials.clientId}:${credentials.clientSecret}:${refreshToken}`;
+  const refreshTokens = resolveSpotifyRefreshTokenCandidates(config, api);
+  const cacheKey = [
+    credentials.clientId,
+    credentials.clientSecret,
+    ...refreshTokens.map((token) => `${token.source}:${token.refreshToken}`),
+  ].join(":");
 
   if (cachedUserClient?.cacheKey === cacheKey) {
     return cachedUserClient.sdk;
   }
 
   const sdk = new SpotifyApi(
-    new SpotifyRefreshTokenAuthStrategy(credentials, refreshToken),
+    new SpotifyRefreshTokenAuthStrategy(credentials, refreshTokens),
   );
 
   cachedUserClient = { cacheKey, sdk };
@@ -374,6 +389,10 @@ export async function exchangeSpotifyAuthorizationCode(
   }
 
   const token = JSON.parse(text) as AccessToken & { scope?: string };
+
+  if (!token.access_token || !token.refresh_token) {
+    throw new Error("Spotify OAuth token exchange returned an invalid token.");
+  }
 
   return {
     accessToken: token.access_token,
@@ -674,13 +693,16 @@ function resolveSpotifyCredentials(
 
 class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
   private accessToken: AccessToken | null = null;
+  private configuration: SdkConfiguration | undefined;
 
   constructor(
     private readonly credentials: SpotifyCredentials,
-    private readonly refreshToken: string,
+    private readonly refreshTokens: readonly SpotifyRefreshTokenCandidate[],
   ) {}
 
-  setConfiguration(): void {}
+  setConfiguration(configuration: SdkConfiguration): void {
+    this.configuration = configuration;
+  }
 
   async getOrCreateAccessToken(): Promise<AccessToken> {
     if (
@@ -690,9 +712,10 @@ class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
       return this.accessToken;
     }
 
-    this.accessToken = await refreshSpotifyAccessToken(
+    this.accessToken = await refreshSpotifyAccessTokenFromCandidates(
       this.credentials,
-      this.refreshToken,
+      this.refreshTokens,
+      this.configuration?.fetch,
     );
     return this.accessToken;
   }
@@ -709,23 +732,30 @@ class SpotifyRefreshTokenAuthStrategy implements IAuthStrategy {
 export async function refreshSpotifyAccessToken(
   credentials: SpotifyCredentials,
   refreshToken: string,
+  fetchImplementation: SdkConfiguration["fetch"] = fetch,
 ): Promise<AccessToken> {
   const body = new URLSearchParams({
     client_id: credentials.clientId,
     grant_type: "refresh_token",
     refresh_token: refreshToken,
   });
-  const response = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+  const response = await fetchImplementation(
+    "https://accounts.spotify.com/api/token",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
     },
-    body,
-  });
+  );
   const text = await response.text();
 
   if (!response.ok) {
-    throw new Error(`Spotify access token refresh failed: ${text}`);
+    throw new SpotifyTokenRefreshError(
+      `Spotify access token refresh failed: ${text}`,
+      text,
+    );
   }
 
   const token = JSON.parse(text) as Partial<AccessToken>;
@@ -743,32 +773,94 @@ export async function refreshSpotifyAccessToken(
   };
 }
 
-function resolveSpotifyRefreshToken(
+async function refreshSpotifyAccessTokenFromCandidates(
+  credentials: SpotifyCredentials,
+  refreshTokens: readonly SpotifyRefreshTokenCandidate[],
+  fetchImplementation: SdkConfiguration["fetch"] = fetch,
+): Promise<AccessToken> {
+  let invalidGrantError: unknown;
+
+  for (const candidate of refreshTokens) {
+    try {
+      return await refreshSpotifyAccessToken(
+        credentials,
+        candidate.refreshToken,
+        fetchImplementation,
+      );
+    } catch (error) {
+      if (!isInvalidGrantError(error)) {
+        throw error;
+      }
+
+      invalidGrantError = error;
+    }
+  }
+
+  const sources = refreshTokens.map((candidate) => candidate.source).join(", ");
+  const cause =
+    invalidGrantError instanceof Error
+      ? ` Last Spotify error: ${invalidGrantError.message}`
+      : "";
+
+  throw new Error(
+    `Spotify refresh token is expired, revoked, or invalid for every configured token source (${sources}). Run \`openclaw spotify auth login\` again, then remove stale plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN values if they still override the saved login.${cause}`,
+  );
+}
+
+function resolveSpotifyRefreshTokenCandidates(
   config: SpotifyPluginConfig,
   api?: SpotifyRuntimeApi,
-): string {
-  const refreshToken = firstNonEmptyString(
-    config.refreshToken,
-    process.env.SPOTIFY_REFRESH_TOKEN,
-  );
+): SpotifyRefreshTokenCandidate[] {
+  const candidates = dedupeRefreshTokenCandidates([
+    {
+      refreshToken: firstNonEmptyString(lastSavedRefreshToken),
+      source: "last-oauth-login",
+    },
+    {
+      refreshToken: readStoredSpotifyRefreshToken(api),
+      source: "openclaw-plugin-state",
+    },
+    {
+      refreshToken: firstNonEmptyString(config.refreshToken),
+      source: "openclaw-config",
+    },
+    {
+      refreshToken: firstNonEmptyString(process.env.SPOTIFY_REFRESH_TOKEN),
+      source: "environment",
+    },
+  ]);
 
-  if (refreshToken) {
-    return refreshToken;
-  }
-
-  if (lastSavedRefreshToken) {
-    return lastSavedRefreshToken;
-  }
-
-  const storedToken = readStoredSpotifyRefreshToken(api);
-
-  if (!storedToken) {
+  if (candidates.length === 0) {
     throw new Error(
       "Spotify OAuth refresh token is missing. Run `openclaw spotify auth login` on the OpenClaw host, or set plugins.entries.spotify.config.refreshToken or SPOTIFY_REFRESH_TOKEN.",
     );
   }
 
-  return storedToken;
+  return candidates;
+}
+
+function dedupeRefreshTokenCandidates(
+  candidates: Array<{
+    refreshToken: string | undefined;
+    source: SpotifyRefreshTokenSource;
+  }>,
+): SpotifyRefreshTokenCandidate[] {
+  const seen = new Set<string>();
+  const resolved: SpotifyRefreshTokenCandidate[] = [];
+
+  for (const candidate of candidates) {
+    if (!candidate.refreshToken || seen.has(candidate.refreshToken)) {
+      continue;
+    }
+
+    seen.add(candidate.refreshToken);
+    resolved.push({
+      refreshToken: candidate.refreshToken,
+      source: candidate.source,
+    });
+  }
+
+  return resolved;
 }
 
 function ensureRecord(parent: MutableRecord, key: string): MutableRecord {
@@ -832,6 +924,30 @@ function firstNonEmptyString(...values: unknown[]): string | undefined {
   }
 
   return undefined;
+}
+
+class SpotifyTokenRefreshError extends Error {
+  constructor(
+    message: string,
+    readonly responseBody: string,
+  ) {
+    super(message);
+    this.name = "SpotifyTokenRefreshError";
+  }
+}
+
+function isInvalidGrantError(error: unknown): boolean {
+  if (!(error instanceof SpotifyTokenRefreshError)) {
+    return false;
+  }
+
+  try {
+    const body = JSON.parse(error.responseBody) as { error?: unknown };
+
+    return body.error === "invalid_grant";
+  } catch {
+    return error.responseBody.includes("invalid_grant");
+  }
 }
 
 function isSpotifyLimit(value: number): value is SpotifyLimit {

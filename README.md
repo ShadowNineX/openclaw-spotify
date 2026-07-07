@@ -67,6 +67,10 @@ The command prints the Spotify authorization URL, waits for the callback, and
 saves the refresh token into OpenClaw config. It does not expose the refresh
 token in chat or on the callback page. Set `redirectUri` or
 `SPOTIFY_REDIRECT_URI` only if you want to use a different localhost callback.
+Tokens saved by `openclaw spotify auth login` are preferred over manual
+`refreshToken` or `SPOTIFY_REFRESH_TOKEN` values. If Spotify reports a saved
+token as revoked, the plugin tries the next configured token source before
+failing.
 
 ## Tools
 

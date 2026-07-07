@@ -3,6 +3,7 @@ import type { Queue, Track } from "@spotify/web-api-ts-sdk";
 
 import {
   canPersistSpotifyRefreshToken,
+  getSpotifyUserClient,
   getSpotifyRefreshTokenPersistenceTarget,
   normalizeSpotifyContextUri,
   normalizeSpotifyPlayableUri,
@@ -203,6 +204,101 @@ describe("Spotify helpers", () => {
       storage: "manual-config-or-env",
       error: undefined,
     });
+  });
+
+  it("uses newly saved OAuth tokens before stale manual config tokens", async () => {
+    const originalFetch = globalThis.fetch;
+    const records = new Map<string, SpotifyOAuthTokenRecord>();
+    const requests: string[] = [];
+    const api: SpotifyRuntimeApi = {
+      runtime: {
+        state: {
+          openSyncKeyedStore: <T>() => ({
+            lookup: (key: string) => records.get(key) as T | undefined,
+            register: (key: string, value: T) => {
+              records.set(key, value as SpotifyOAuthTokenRecord);
+            },
+          }),
+        },
+      },
+    };
+
+    await saveSpotifyRefreshToken(api, {
+      refreshToken: "fresh-login-token",
+    });
+
+    globalThis.fetch = (async (url, init) => {
+      const href = url instanceof Request ? url.url : String(url);
+
+      if (href === "https://accounts.spotify.com/api/token") {
+        const body = String(init?.body);
+        requests.push(body);
+
+        if (body.includes("refresh_token=revoked-config-token")) {
+          return new Response(JSON.stringify({ error: "invalid_grant" }), {
+            status: 400,
+          });
+        }
+
+        return new Response(
+          JSON.stringify({
+            access_token: "access-token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (href === "https://api.spotify.com/v1/me") {
+        return new Response(
+          JSON.stringify({
+            country: "US",
+            display_name: "Me",
+            email: "me@example.com",
+            explicit_content: {
+              filter_enabled: false,
+              filter_locked: false,
+            },
+            external_urls: {
+              spotify: "https://open.spotify.com/user/me",
+            },
+            followers: {
+              total: 0,
+            },
+            href: href,
+            id: "me",
+            images: [],
+            product: "premium",
+            type: "user",
+            uri: "spotify:user:me",
+          }),
+          { status: 200 },
+        );
+      }
+
+      return new Response("Unexpected test request", { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const sdk = getSpotifyUserClient(
+        {
+          clientId: "client-id",
+          clientSecret: "client-secret",
+          refreshToken: "revoked-config-token",
+        },
+        api,
+      );
+
+      await expect(sdk.currentUser.profile()).resolves.toMatchObject({
+        id: "me",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toContain("refresh_token=fresh-login-token");
   });
 
   it("refreshes OAuth access tokens before user API calls need them", async () => {
