@@ -1,0 +1,66 @@
+{
+  "id": "spotify",
+  "name": "Spotify",
+  "description": "Spotify integration plugin for OpenClaw",
+  "version": "0.1.0",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "clientId": {
+        "type": "string",
+        "description": "Spotify application client ID. Falls back to SPOTIFY_CLIENT_ID."
+      },
+      "clientSecret": {
+        "type": "string",
+        "description": "Spotify application client secret. Falls back to SPOTIFY_CLIENT_SECRET."
+      },
+      "refreshToken": {
+        "type": "string",
+        "description": "Spotify OAuth refresh token for user-library and playlist write tools. Falls back to SPOTIFY_REFRESH_TOKEN."
+      },
+      "redirectUri": {
+        "type": "string",
+        "description": "Spotify OAuth redirect URI for generating and exchanging PKCE authorization codes. Falls back to SPOTIFY_REDIRECT_URI."
+      },
+      "market": {
+        "type": "string",
+        "description": "Default ISO 3166-1 alpha-2 market code for market-scoped Spotify requests.",
+        "minLength": 2,
+        "maxLength": 2
+      }
+    },
+    "additionalProperties": false
+  },
+  "uiHints": {
+    "clientId": {
+      "label": "Spotify client ID"
+    },
+    "clientSecret": {
+      "label": "Spotify client secret",
+      "sensitive": true
+    },
+    "market": {
+      "label": "Default market"
+    }
+  },
+  "contracts": {
+    "tools": [
+      "spotify_search",
+      "spotify_get_track",
+      "spotify_get_artist",
+      "spotify_get_album",
+      "spotify_get_playlist",
+      "spotify_oauth_start",
+      "spotify_oauth_status",
+      "spotify_list_my_playlists",
+      "spotify_create_playlist",
+      "spotify_update_playlist",
+      "spotify_add_playlist_tracks",
+      "spotify_remove_playlist_tracks",
+      "spotify_reorder_playlist_tracks"
+    ]
+  }
+}

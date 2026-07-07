@@ -1,0 +1,47 @@
+import { getToolPluginMetadata } from "openclaw/plugin-sdk/tool-plugin";
+import { describe, expect, it } from "vitest";
+
+import entry from "../index";
+
+const spotifyToolNames = [
+  "spotify_search",
+  "spotify_get_track",
+  "spotify_get_artist",
+  "spotify_get_album",
+  "spotify_get_playlist",
+  "spotify_oauth_start",
+  "spotify_oauth_status",
+  "spotify_list_my_playlists",
+  "spotify_create_playlist",
+  "spotify_update_playlist",
+  "spotify_add_playlist_tracks",
+  "spotify_remove_playlist_tracks",
+  "spotify_reorder_playlist_tracks",
+];
+
+describe("Spotify tool plugin metadata", () => {
+  it("exposes the Spotify tools OpenClaw discovers", () => {
+    const metadata = getToolPluginMetadata(entry);
+
+    expect(metadata?.id).toBe("spotify");
+    expect(metadata?.tools.map((tool) => tool.name)).toEqual(spotifyToolNames);
+  });
+
+  it("keeps search parameters discoverable as JSON schema", () => {
+    const metadata = getToolPluginMetadata(entry);
+    const searchTool = metadata?.tools.find(
+      (tool) => tool.name === "spotify_search",
+    );
+
+    expect(searchTool?.parameters).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        query: {
+          type: "string",
+          minLength: 1,
+        },
+      },
+    });
+  });
+});
