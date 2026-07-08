@@ -38,6 +38,7 @@ type SpotifyAccessToken = TokenResponse & {
 type TrackItem = Track | Episode;
 type PlaylistedTrack = {
   added_at?: string;
+  item?: TrackItem | null;
   track?: TrackItem | null;
 };
 type SpotifyExternalUrls = {
@@ -660,7 +661,7 @@ export function summarizePlaylist(
 }
 
 export function summarizePlaylistTrack(item: PlaylistedTrack) {
-  const track = item.track;
+  const track = item.track ?? item.item;
 
   if (track?.type !== "track") {
     return {
