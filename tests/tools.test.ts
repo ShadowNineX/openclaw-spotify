@@ -478,7 +478,7 @@ describe("Spotify tool plugin metadata", () => {
             href,
             items: [
               {
-                track: {
+                item: {
                   album: {
                     id: "album-1",
                     name: "Album",
@@ -537,6 +537,12 @@ describe("Spotify tool plugin metadata", () => {
         },
         tracks: {
           total: 1,
+          items: [
+            {
+              name: "Track",
+              uri: "spotify:track:track-1",
+            },
+          ],
         },
       });
     } finally {
