@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import entry from "../index";
 import { buildSpotifyToolApproval } from "../src/approval-policy";
 import { defineCreatePlaylistTool } from "../src/tools/create-playlist";
+import { definePlaylistTool } from "../src/tools/playlist";
 import { defineUploadPlaylistCoverTool } from "../src/tools/upload-playlist-cover";
 
 const spotifyToolNames = [
@@ -379,6 +380,174 @@ describe("Spotify tool plugin metadata", () => {
     expect(
       updateParameters.properties.public.description,
     ).toContain("does not control who can open the playlist link");
+  });
+
+  it("reads playlist tracks with user OAuth instead of client credentials", async () => {
+    const originalFetch = globalThis.fetch;
+    const tokenRequests: URLSearchParams[] = [];
+    const playlistTool = definePlaylistTool(
+      ((definition: unknown) => definition) as never,
+    ) as unknown as {
+      execute(
+        params: {
+          id: string;
+          limit?: number;
+          market?: string;
+          offset?: number;
+        },
+        config: {
+          clientId: string;
+          clientSecret: string;
+          refreshToken: string;
+        },
+        context: {
+          api?: unknown;
+        },
+      ): Promise<unknown>;
+    };
+
+    globalThis.fetch = (async (url, init) => {
+      const href = url instanceof Request ? url.url : String(url);
+
+      if (href === "https://accounts.spotify.com/api/token") {
+        expect(init?.method).toBe("POST");
+        tokenRequests.push(new URLSearchParams(String(init?.body)));
+
+        return new Response(
+          JSON.stringify({
+            access_token: "user-access-token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (href === "https://api.spotify.com/v1/playlists/playlist-1?market=SE") {
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer user-access-token",
+        );
+
+        return new Response(
+          JSON.stringify({
+            collaborative: false,
+            description: "",
+            external_urls: {
+              spotify: "https://open.spotify.com/playlist/playlist-1",
+            },
+            followers: {
+              total: 0,
+            },
+            href,
+            id: "playlist-1",
+            images: [],
+            name: "Good Signal",
+            owner: {
+              display_name: "Me",
+              external_urls: {
+                spotify: "https://open.spotify.com/user/me",
+              },
+              href: "https://api.spotify.com/v1/users/me",
+              id: "me",
+              type: "user",
+              uri: "spotify:user:me",
+            },
+            public: true,
+            snapshot_id: "snapshot-1",
+            tracks: {
+              href: "https://api.spotify.com/v1/playlists/playlist-1/tracks",
+              total: 1,
+            },
+            type: "playlist",
+            uri: "spotify:playlist:playlist-1",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (
+        href ===
+        "https://api.spotify.com/v1/playlists/playlist-1/items?market=SE&limit=20&offset=0"
+      ) {
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer user-access-token",
+        );
+
+        return new Response(
+          JSON.stringify({
+            href,
+            items: [
+              {
+                track: {
+                  album: {
+                    id: "album-1",
+                    name: "Album",
+                    release_date: "2026",
+                    uri: "spotify:album:album-1",
+                  },
+                  artists: [
+                    {
+                      id: "artist-1",
+                      name: "Artist",
+                      uri: "spotify:artist:artist-1",
+                    },
+                  ],
+                  disc_number: 1,
+                  duration_ms: 123,
+                  explicit: false,
+                  id: "track-1",
+                  name: "Track",
+                  track_number: 1,
+                  type: "track",
+                  uri: "spotify:track:track-1",
+                },
+              },
+            ],
+            limit: 20,
+            next: null,
+            offset: 0,
+            previous: null,
+            total: 1,
+          }),
+          { status: 200 },
+        );
+      }
+
+      return new Response(`Unexpected test request: ${href}`, { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      await expect(
+        playlistTool.execute(
+          {
+            id: "playlist-1",
+            market: "SE",
+          },
+          {
+            clientId: "playlist-client-id",
+            clientSecret: "playlist-client-secret",
+            refreshToken: "playlist-refresh-token",
+          },
+          {},
+        ),
+      ).resolves.toMatchObject({
+        playlist: {
+          id: "playlist-1",
+          name: "Good Signal",
+        },
+        tracks: {
+          total: 1,
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(tokenRequests).toHaveLength(1);
+    expect(tokenRequests[0]?.get("grant_type")).toBe("refresh_token");
+    expect(tokenRequests[0]?.get("refresh_token")).toBe(
+      "playlist-refresh-token",
+    );
   });
 
   it("uploads playlist covers as raw JPEG base64", async () => {

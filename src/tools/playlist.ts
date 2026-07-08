@@ -1,7 +1,7 @@
 import {
   clampSpotifyLimit,
   clampSpotifyOffset,
-  getSpotifyClient,
+  getSpotifyUserClient,
   resolveSpotifyMarket,
   summarizePage,
   summarizePlaylist,
@@ -17,8 +17,8 @@ export function definePlaylistTool(tool: SpotifyToolFactory): SpotifyTool {
     description:
       "Get Spotify catalog metadata and tracks for a public playlist by Spotify playlist ID.",
     parameters: playlistSchema,
-    async execute(params, config) {
-      const client = getSpotifyClient(config);
+    async execute(params, config, context) {
+      const client = getSpotifyUserClient(config, context.api);
       const market = resolveSpotifyMarket(params.market, config);
       const playlist = await client.playlists.get(params.id, { market });
       const tracks = await client.playlists.getItems(params.id, {
