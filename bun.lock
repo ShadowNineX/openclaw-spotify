@@ -5,7 +5,7 @@
     "": {
       "name": "@shadowninex/openclaw-spotify",
       "dependencies": {
-        "@shadownine/foxify": "^0.1.3",
+        "@shadownine/foxify": "^0.1.4",
         "sharp": "^0.35.3",
         "typebox": "1.3.4",
       },
@@ -244,7 +244,7 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
-    "@shadownine/foxify": ["@shadownine/foxify@0.1.3", "", { "dependencies": { "oauth4webapi": "^3.8.6", "ofetch": "^1.5.1" } }, "sha512-celIanM6O+mOfLT1mKnM8ZW8iZBz33mO8Um8b7AbOJ3xR9fw7N8Dlyd2CG+jBPwpZEacGwP5gwSzapIWzQbi/w=="],
+    "@shadownine/foxify": ["@shadownine/foxify@0.1.4", "", { "dependencies": { "oauth4webapi": "^3.8.6", "ofetch": "^1.5.1" } }, "sha512-hhlSvf3hudZQOqfYsqNt/lGFsw/RmLBDYfFsglaBxDHPEq7KhfURr5+rB5ftYfsx/hSW7lusWyqWxu1r7q4dHA=="],
 
     "@silvia-odwyer/photon-node": ["@silvia-odwyer/photon-node@0.3.4", "", {}, "sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA=="],
 
