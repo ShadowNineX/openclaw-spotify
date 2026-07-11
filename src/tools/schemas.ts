@@ -125,11 +125,11 @@ export const createPlaylistSchema = Type.Object(
         description: "Playlist description.",
       }),
     ),
-    public: Type.Optional(
+    hiddenFromProfile: Type.Optional(
       Type.Boolean({
         description:
-          "Whether Spotify should publish the playlist on the user's profile and in search. This does not control who can open the playlist link.",
-        default: false,
+          "Hide the playlist from the user's profile and Spotify search. This does not restrict link access or make the playlist private.",
+        default: true,
       }),
     ),
     collaborative: Type.Optional(
@@ -159,10 +159,10 @@ export const updatePlaylistSchema = Type.Object(
         description: "New playlist description.",
       }),
     ),
-    public: Type.Optional(
+    hiddenFromProfile: Type.Optional(
       Type.Boolean({
         description:
-          "Whether Spotify should publish the playlist on the user's profile and in search. This does not control who can open the playlist link.",
+          "Hide the playlist from the user's profile and Spotify search. This does not restrict link access or make the playlist private.",
       }),
     ),
     collaborative: Type.Optional(

@@ -1,45 +1,53 @@
 ---
 name: spotify
-description: "Use the OpenClaw Spotify plugin for catalog search, playlist management, and playback control."
+description: Use Spotify tools for search, playlist management, cover art, and Spotify Connect playback.
 ---
 
 # Spotify
 
-Use this skill when the user asks to search Spotify, inspect tracks/artists/albums/playlists, manage their own playlists, or control Spotify playback through OpenClaw tools.
+Use these tools for Spotify catalog lookup, the authorized user's playlists, and playback.
 
-## Tool Routing
+## Choose the tool
 
-- Use `spotify_search` for broad discovery across tracks, artists, albums, and playlists.
-- Use `spotify_get_track`, `spotify_get_artist`, `spotify_get_album`, or `spotify_get_playlist` when the user has a known Spotify URL, URI, or ID.
-- Use `spotify_list_my_playlists` before modifying playlists when the user has not given a specific playlist ID.
-- Use `spotify_create_playlist`, `spotify_update_playlist`, `spotify_delete_playlist`, `spotify_add_playlist_tracks`, `spotify_remove_playlist_tracks`, `spotify_reorder_playlist_tracks`, and `spotify_upload_playlist_cover` only for the authorized user's playlists.
-- Use `spotify_upload_playlist_cover` for custom playlist artwork. Prefer `imageUrl` when the image is online; the tool converts/crops/compresses to Spotify's JPEG cover format by default and requires OAuth with `ugc-image-upload`.
-- Use `spotify_get_playback`, `spotify_get_currently_playing`, `spotify_list_devices`, and `spotify_get_queue` for playback state, devices, and queue inspection.
-- Use `spotify_transfer_playback`, `spotify_play`, `spotify_pause`, `spotify_next`, `spotify_previous`, `spotify_seek`, `spotify_set_repeat`, `spotify_set_volume`, `spotify_set_shuffle`, and `spotify_add_to_queue` for Spotify Connect playback control.
+- Discover: `spotify_search`.
+- Inspect a known item: `spotify_get_track`, `spotify_get_artist`, `spotify_get_album`, or `spotify_get_playlist` with its Spotify ID, URI, or URL.
+- Find one of the user's playlists: `spotify_list_my_playlists`. Do this before an edit when no playlist ID was supplied.
+- Manage playlists: `spotify_create_playlist`, `spotify_update_playlist`, `spotify_delete_playlist`, `spotify_add_playlist_tracks`, `spotify_remove_playlist_tracks`, `spotify_reorder_playlist_tracks`, or `spotify_upload_playlist_cover`.
+- Inspect playback: `spotify_get_playback`, `spotify_get_currently_playing`, `spotify_list_devices`, or `spotify_get_queue`.
+- Control playback: `spotify_transfer_playback`, `spotify_play`, `spotify_pause`, `spotify_next`, `spotify_previous`, `spotify_seek`, `spotify_set_repeat`, `spotify_set_volume`, `spotify_set_shuffle`, or `spotify_add_to_queue`.
 
-## OAuth Flow
+Prefer IDs or URIs returned by Spotify tools instead of guessing identifiers. For online cover art, pass `imageUrl`; the cover tool prepares Spotify-compatible JPEG artwork.
 
-OAuth setup is not exposed as an agent tool. If OAuth is missing, tell the user to run this on the OpenClaw host:
+## Playlist visibility is not privacy
+
+Spotify's Web API **cannot make a playlist private or restrict link access**. The `hiddenFromProfile` input only controls discovery:
+
+- `true`: hide the playlist from the owner's profile and Spotify search.
+- `false`: publish it on the owner's profile and make it searchable.
+
+Anyone with the playlist link can still open it in either state. Never describe `hiddenFromProfile: true` as "private," never report link access as a failure, and never retry the operation merely because the link still works.
+
+If the user asks to make a playlist private, explain the API limitation. Offer to hide it from their profile with `hiddenFromProfile: true`; tell them true access privacy must be changed manually in a Spotify client. Collaborative playlists are necessarily hidden from the profile because Spotify does not allow collaborative and profile-published states together.
+
+## Safe workflow
+
+1. Resolve the exact playlist, track, and device IDs needed for the request.
+2. Confirm the target before removals, reordering, deletion, description changes, or profile-visibility changes.
+3. Call the narrowest matching tool once. Playlist update/delete tools may show an OpenClaw approval prompt; creation and track additions do not.
+4. Report what changed. Preserve returned snapshot IDs for remove or reorder operations.
+
+## OAuth
+
+If a user-scoped tool reports missing OAuth, tell the user to run this on the OpenClaw host instead of retrying:
 
 ```bash
 openclaw spotify auth login
 ```
 
-For a VPS, tell the user to use an SSH port forward from their browser machine:
+For a remote host, the user can forward the default callback port before logging in:
 
 ```bash
 ssh -L 4377:127.0.0.1:4377 user@your-vps
 ```
 
-Do not ask the user to paste OAuth codes, callback URLs, refresh tokens, or access tokens into chat.
-
-The default callback is `http://127.0.0.1:4377/callback`. The Spotify app must allow that redirect URI unless config overrides it.
-
-## Playlist Safety
-
-- Confirm the target playlist before destructive edits like remove, reorder, visibility changes, or description changes.
-- Playlist edit/delete tools open an OpenClaw plugin approval prompt before execution; the plugin fetches the playlist name for that prompt when OAuth is configured. Additive tools such as `spotify_create_playlist` and `spotify_add_playlist_tracks` do not prompt.
-- Confirm the target device before transferring playback or changing playback on a specific device.
-- Prefer track URIs or IDs from `spotify_search` results when adding tracks.
-- For remove or reorder operations, preserve and report returned snapshot IDs when available.
-- If an operation fails due to missing OAuth, tell the user to run the terminal OAuth command instead of retrying the playlist tool.
+The default callback is `http://127.0.0.1:4377/callback` and must be registered in the Spotify app unless configured otherwise. Never ask the user to paste OAuth codes, callback URLs, access tokens, or refresh tokens into chat.

@@ -5,6 +5,7 @@ import entry from "../index";
 import { buildSpotifyToolApproval } from "../src/approval-policy";
 import { defineCreatePlaylistTool } from "../src/tools/create-playlist";
 import { definePlaylistTool } from "../src/tools/playlist";
+import { defineUpdatePlaylistTool } from "../src/tools/update-playlist";
 import { defineUploadPlaylistCoverTool } from "../src/tools/upload-playlist-cover";
 
 const spotifyToolNames = [
@@ -238,7 +239,7 @@ describe("Spotify tool plugin metadata", () => {
           collaborative?: boolean;
           description?: string;
           name: string;
-          public?: boolean;
+          hiddenFromProfile?: boolean;
         },
         config: {
           clientId: string;
@@ -281,7 +282,7 @@ describe("Spotify tool plugin metadata", () => {
             href,
             id: "profile-hidden-1",
             images: [],
-            name: "Private test",
+            name: "Hidden test",
             owner: {
               display_name: "Me",
               external_urls: {
@@ -319,9 +320,9 @@ describe("Spotify tool plugin metadata", () => {
       await expect(
         createPlaylistTool.execute(
           {
-            name: "Private test",
+            name: "Hidden test",
             description: "Hidden from profile",
-            public: false,
+            hiddenFromProfile: true,
           },
           {
             clientId: "create-profile-hidden-client-id",
@@ -331,10 +332,10 @@ describe("Spotify tool plugin metadata", () => {
           {},
         ),
       ).resolves.toMatchObject({
-        public: false,
         visibility: {
-          publishedOnProfileAndSearch: false,
-          controlsLinkAccess: false,
+          hiddenFromProfile: true,
+          searchable: false,
+          linkAccessRestricted: false,
         },
       });
     } finally {
@@ -342,7 +343,7 @@ describe("Spotify tool plugin metadata", () => {
     }
 
     expect(createPlaylistBody).toMatchObject({
-      name: "Private test",
+      name: "Hidden test",
       description: "Hidden from profile",
       public: false,
       collaborative: false,
@@ -353,7 +354,66 @@ describe("Spotify tool plugin metadata", () => {
     });
   });
 
-  it("describes Spotify playlist public flags as profile and search visibility", () => {
+  it("maps profile visibility updates to Spotify's public field", async () => {
+    const originalFetch = globalThis.fetch;
+    let changeDetailsBody: unknown;
+    const updatePlaylistTool = defineUpdatePlaylistTool(
+      ((definition: unknown) => definition) as never,
+    ) as unknown as {
+      execute(
+        params: { id: string; hiddenFromProfile?: boolean },
+        config: {
+          clientId: string;
+          clientSecret: string;
+          refreshToken: string;
+        },
+        context: { api?: unknown },
+      ): Promise<unknown>;
+    };
+
+    globalThis.fetch = (async (url, init) => {
+      const href = url instanceof Request ? url.url : String(url);
+
+      if (href === "https://accounts.spotify.com/api/token") {
+        return new Response(
+          JSON.stringify({
+            access_token: "access-token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (href === "https://api.spotify.com/v1/playlists/playlist-1") {
+        expect(init?.method).toBe("PUT");
+        changeDetailsBody = JSON.parse(String(init?.body));
+        return new Response(null, { status: 200 });
+      }
+
+      return new Response("Unexpected test request", { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      await expect(
+        updatePlaylistTool.execute(
+          { id: "playlist-1", hiddenFromProfile: false },
+          {
+            clientId: "update-visibility-client-id",
+            clientSecret: "update-visibility-client-secret",
+            refreshToken: "update-visibility-refresh-token",
+          },
+          {},
+        ),
+      ).resolves.toEqual({ id: "playlist-1", updated: true });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(changeDetailsBody).toMatchObject({ public: true });
+  });
+
+  it("exposes profile hiding without implying playlist privacy", () => {
     const metadata = getToolPluginMetadata(entry);
     const createTool = metadata?.tools.find(
       (tool) => tool.name === "spotify_create_playlist",
@@ -362,24 +422,23 @@ describe("Spotify tool plugin metadata", () => {
       (tool) => tool.name === "spotify_update_playlist",
     );
     const createParameters = createTool?.parameters as {
-      properties: { public: { description: string } };
+      properties: { hiddenFromProfile: { description: string } };
     };
     const updateParameters = updateTool?.parameters as {
-      properties: { public: { description: string } };
+      properties: { hiddenFromProfile: { description: string } };
     };
 
+    expect(createParameters.properties).not.toHaveProperty("public");
+    expect(updateParameters.properties).not.toHaveProperty("public");
     expect(
-      createParameters.properties.public.description,
-    ).toContain("profile and in search");
+      createParameters.properties.hiddenFromProfile.description,
+    ).toContain("profile and Spotify search");
     expect(
-      createParameters.properties.public.description,
-    ).toContain("does not control who can open the playlist link");
+      createParameters.properties.hiddenFromProfile.description,
+    ).toContain("does not restrict link access");
     expect(
-      updateParameters.properties.public.description,
-    ).toContain("profile and in search");
-    expect(
-      updateParameters.properties.public.description,
-    ).toContain("does not control who can open the playlist link");
+      updateParameters.properties.hiddenFromProfile.description,
+    ).toContain("does not restrict link access");
   });
 
   it("reads playlist tracks with user OAuth instead of client credentials", async () => {

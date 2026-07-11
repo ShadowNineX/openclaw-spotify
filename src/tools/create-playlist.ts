@@ -11,22 +11,22 @@ export function defineCreatePlaylistTool(tool: SpotifyToolFactory): SpotifyTool 
     async execute(params, config, context) {
       const client = getSpotifyUserClient(config, context.api);
       const collaborative = params.collaborative === true;
-      const isPublic = collaborative ? false : params.public === true;
+      const hiddenFromProfile = collaborative || params.hiddenFromProfile !== false;
       const playlist = await client.playlists.create({
         name: params.name,
         description: params.description,
-        public: isPublic,
+        public: !hiddenFromProfile,
         collaborative,
       });
 
       await client.playlists.changeDetails(playlist.id, {
-        public: isPublic,
+        public: !hiddenFromProfile,
         collaborative,
       });
 
       return summarizePlaylist({
         ...playlist,
-        public: isPublic,
+        public: !hiddenFromProfile,
         collaborative,
       });
     },

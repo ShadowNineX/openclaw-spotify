@@ -79,10 +79,10 @@ plugin saves the replacement token back to OpenClaw automatically.
 - `spotify_get_track`: get track metadata.
 - `spotify_get_artist`: get artist metadata and optional top tracks.
 - `spotify_get_album`: get album metadata and optional tracks.
-- `spotify_get_playlist`: get public playlist metadata and tracks.
+- `spotify_get_playlist`: get playlist metadata and tracks available to the authorized user.
 - `spotify_list_my_playlists`: list the authorized user's playlists.
-- `spotify_create_playlist`: create a playlist.
-- `spotify_update_playlist`: update playlist details.
+- `spotify_create_playlist`: create a playlist; `hiddenFromProfile` defaults to `true`.
+- `spotify_update_playlist`: update playlist details or profile visibility with `hiddenFromProfile`.
 - `spotify_delete_playlist`: delete or remove a playlist from the authorized user's library.
 - `spotify_add_playlist_tracks`: add tracks to a playlist.
 - `spotify_remove_playlist_tracks`: remove tracks from a playlist.
@@ -102,6 +102,20 @@ plugin saves the replacement token back to OpenClaw automatically.
 - `spotify_set_volume`: set volume.
 - `spotify_set_shuffle`: enable or disable shuffle.
 - `spotify_add_to_queue`: add a track or episode to the queue.
+
+### Playlist visibility
+
+Spotify's Web API cannot make a playlist private or restrict access to it. The
+playlist tools therefore expose `hiddenFromProfile` instead of Spotify's
+misleading `public` API field:
+
+- `hiddenFromProfile: true` hides the playlist from the owner's profile and
+  Spotify search.
+- `hiddenFromProfile: false` publishes the playlist on the owner's profile and
+  makes it searchable.
+
+Either way, anyone with the playlist link can still open it. Access privacy
+must be changed manually in a Spotify client.
 
 Playlist edit/delete tools request an OpenClaw plugin approval before they run.
 Adding tracks and creating playlists do not prompt. Destructive actions like

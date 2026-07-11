@@ -644,12 +644,13 @@ export function summarizePlaylist(
           url: source.owner.external_urls.spotify,
         }
       : undefined,
-    public: source.public,
     visibility: {
-      publishedOnProfileAndSearch: source.public,
-      controlsLinkAccess: false,
+      hiddenFromProfile:
+        source.public === null ? null : !source.public,
+      searchable: source.public,
+      linkAccessRestricted: false,
       note:
-        "Spotify Web API public=false hides playlists from profile/search; it does not control who can open the playlist link.",
+        "Profile visibility is not playlist privacy. Spotify's Web API cannot restrict access; anyone with the link can still open this playlist.",
     },
     collaborative: source.collaborative,
     followers: source.followers?.total,

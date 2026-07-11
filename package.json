@@ -1,6 +1,6 @@
 {
   "name": "@shadowninex/openclaw-spotify",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Spotify integration plugin for OpenClaw",
   "type": "module",
   "files": [
