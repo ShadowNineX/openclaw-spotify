@@ -5,6 +5,7 @@ import entry from "../index";
 import { buildSpotifyToolApproval } from "../src/approval-policy";
 import { defineCreatePlaylistTool } from "../src/tools/create-playlist";
 import { definePlaylistTool } from "../src/tools/playlist";
+import { defineRemovePlaylistTracksTool } from "../src/tools/remove-playlist-tracks";
 import { defineUpdatePlaylistTool } from "../src/tools/update-playlist";
 import { defineUploadPlaylistCoverTool } from "../src/tools/upload-playlist-cover";
 
@@ -439,6 +440,79 @@ describe("Spotify tool plugin metadata", () => {
     expect(
       updateParameters.properties.hiddenFromProfile.description,
     ).toContain("does not restrict link access");
+  });
+
+  it("sends Spotify's current items body when removing playlist tracks", async () => {
+    const originalFetch = globalThis.fetch;
+    let removeBody: unknown;
+    const removePlaylistTracksTool = defineRemovePlaylistTracksTool(
+      ((definition: unknown) => definition) as never,
+    ) as unknown as {
+      execute(
+        params: { id: string; snapshotId?: string; uris: string[] },
+        config: {
+          clientId: string;
+          clientSecret: string;
+          refreshToken: string;
+        },
+        context: { api?: unknown },
+      ): Promise<unknown>;
+    };
+
+    globalThis.fetch = (async (url, init) => {
+      const href = url instanceof Request ? url.url : String(url);
+
+      if (href === "https://accounts.spotify.com/api/token") {
+        return new Response(
+          JSON.stringify({
+            access_token: "remove-access-token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (href === "https://api.spotify.com/v1/playlists/playlist-1/items") {
+        expect(init?.method).toBe("DELETE");
+        removeBody = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({ snapshot_id: "snapshot-after-remove" }),
+          { status: 200 },
+        );
+      }
+
+      return new Response("Unexpected test request", { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      await expect(
+        removePlaylistTracksTool.execute(
+          {
+            id: "playlist-1",
+            snapshotId: "snapshot-before-remove",
+            uris: ["4iV5W9uYEdYUVa79Axb7Rh"],
+          },
+          {
+            clientId: "remove-client-id",
+            clientSecret: "remove-client-secret",
+            refreshToken: "remove-refresh-token",
+          },
+          {},
+        ),
+      ).resolves.toMatchObject({
+        id: "playlist-1",
+        removed: 1,
+        uris: ["spotify:track:4iV5W9uYEdYUVa79Axb7Rh"],
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(removeBody).toEqual({
+      items: [{ uri: "spotify:track:4iV5W9uYEdYUVa79Axb7Rh" }],
+      snapshot_id: "snapshot-before-remove",
+    });
   });
 
   it("reads playlist tracks with user OAuth instead of client credentials", async () => {

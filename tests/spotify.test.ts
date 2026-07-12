@@ -494,6 +494,111 @@ describe("Spotify helpers", () => {
       `Basic ${Buffer.from("client%2Did:client%2Dsecret").toString("base64")}`,
     );
   });
+  it("keeps a fresh token usable when durable storage is read-only", async () => {
+    const originalFetch = globalThis.fetch;
+    const refreshRequests: string[] = [];
+    const api: SpotifyRuntimeApi = {
+      runtime: {
+        config: {
+          mutateConfigFile: async () => {
+            throw new Error("EROFS config");
+          },
+        },
+        state: {
+          openSyncKeyedStore: <T>() => ({
+            lookup: () => undefined,
+            register: (_key: string, _value: T) => {
+              throw new Error("EROFS state");
+            },
+          }),
+        },
+      },
+    };
+
+    await expect(
+      saveSpotifyRefreshToken(api, {
+        refreshToken: "fresh-memory-token",
+      }),
+    ).resolves.toEqual({
+      persisted: false,
+      storage: "manual-config-or-env",
+      error: "openclaw-config: EROFS config; openclaw-plugin-state: EROFS state",
+    });
+
+    globalThis.fetch = (async (url, init) => {
+      const href = url instanceof Request ? url.url : String(url);
+
+      if (href === "https://accounts.spotify.com/api/token") {
+        const body = String(init?.body);
+        refreshRequests.push(body);
+
+        if (!body.includes("refresh_token=fresh-memory-token")) {
+          return new Response(JSON.stringify({ error: "invalid_grant" }), {
+            status: 400,
+          });
+        }
+
+        return new Response(
+          JSON.stringify({
+            access_token: "fresh-memory-access-token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (href === "https://api.spotify.com/v1/me") {
+        return new Response(
+          JSON.stringify({
+            country: "US",
+            display_name: "Me",
+            email: "me@example.com",
+            explicit_content: {
+              filter_enabled: false,
+              filter_locked: false,
+            },
+            external_urls: {
+              spotify: "https://open.spotify.com/user/me",
+            },
+            followers: { total: 0 },
+            href,
+            id: "me",
+            images: [],
+            product: "premium",
+            type: "user",
+            uri: "spotify:user:me",
+          }),
+          { status: 200 },
+        );
+      }
+
+      return new Response("Unexpected test request", { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const client = getSpotifyUserClient(
+        {
+          clientId: "readonly-client-id",
+          clientSecret: "readonly-client-secret",
+          refreshToken: "stale-readonly-token",
+        },
+        api,
+      );
+
+      await expect(client.users.getCurrentProfile()).resolves.toMatchObject({
+        id: "me",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(refreshRequests).toHaveLength(1);
+    expect(refreshRequests[0]).toContain(
+      "refresh_token=fresh-memory-token",
+    );
+  });
+
 });
 
 function trackFixture(id: string, name: string): Track {

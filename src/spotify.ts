@@ -300,6 +300,9 @@ export async function saveSpotifyRefreshToken(
   api: SpotifyRuntimeApi | undefined,
   token: Omit<SpotifyOAuthTokenRecord, "savedAt">,
 ): Promise<SpotifyRefreshTokenPersistenceResult> {
+  lastSavedRefreshToken = token.refreshToken;
+  cachedUserClient = undefined;
+
   const configResult = await saveSpotifyRefreshTokenToConfig(api, token);
 
   if (configResult.persisted) {
@@ -312,10 +315,19 @@ export async function saveSpotifyRefreshToken(
     return stateResult;
   }
 
+  const errors = [
+    configResult.error
+      ? `openclaw-config: ${configResult.error}`
+      : undefined,
+    stateResult.error
+      ? `openclaw-plugin-state: ${stateResult.error}`
+      : undefined,
+  ].filter((error): error is string => error !== undefined);
+
   return {
     persisted: false,
     storage: "manual-config-or-env",
-    error: configResult.error ?? stateResult.error,
+    error: errors.length > 0 ? errors.join("; ") : undefined,
   };
 }
 
@@ -337,8 +349,6 @@ function saveSpotifyRefreshTokenToState(
       ...token,
       savedAt: new Date().toISOString(),
     });
-    lastSavedRefreshToken = token.refreshToken;
-    cachedUserClient = undefined;
     return {
       persisted: true,
       storage: "openclaw-plugin-state",
@@ -384,8 +394,6 @@ async function saveSpotifyRefreshTokenToConfig(
       },
     });
 
-    lastSavedRefreshToken = token.refreshToken;
-    cachedUserClient = undefined;
     return {
       persisted: true,
       storage: "openclaw-config",

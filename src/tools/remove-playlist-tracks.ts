@@ -19,7 +19,7 @@ export function defineRemovePlaylistTracksTool(
       const uris = normalizeSpotifyTrackUris(params.uris);
 
       await client.playlists.removeItems(params.id, {
-        tracks: uris.map((uri) => ({ uri })),
+        items: uris.map((uri) => ({ uri })),
         snapshot_id: params.snapshotId,
       });
 
