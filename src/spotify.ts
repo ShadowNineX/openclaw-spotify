@@ -201,7 +201,10 @@ let cachedUserClient:
       client: SpotifyClient;
     }
   | undefined;
-let lastSavedRefreshToken: string | undefined;
+const lastSavedRefreshTokensByRuntime = new WeakMap<
+  SpotifyRuntimeApi,
+  string
+>();
 
 export const SPOTIFY_PLAYLIST_SCOPES = [
   "playlist-read-private",
@@ -300,7 +303,9 @@ export async function saveSpotifyRefreshToken(
   api: SpotifyRuntimeApi | undefined,
   token: Omit<SpotifyOAuthTokenRecord, "savedAt">,
 ): Promise<SpotifyRefreshTokenPersistenceResult> {
-  lastSavedRefreshToken = token.refreshToken;
+  if (api) {
+    lastSavedRefreshTokensByRuntime.set(api, token.refreshToken);
+  }
   cachedUserClient = undefined;
 
   const configResult = await saveSpotifyRefreshTokenToConfig(api, token);
@@ -971,7 +976,9 @@ function resolveSpotifyRefreshTokenCandidates(
 ): SpotifyRefreshTokenCandidate[] {
   const candidates = dedupeRefreshTokenCandidates([
     {
-      refreshToken: firstNonEmptyString(lastSavedRefreshToken),
+      refreshToken: firstNonEmptyString(
+        api ? lastSavedRefreshTokensByRuntime.get(api) : undefined,
+      ),
       source: "last-oauth-login",
     },
     {
