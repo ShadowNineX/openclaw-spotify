@@ -7,6 +7,7 @@ import {
   getSpotifyUserClient,
   getSpotifyRefreshTokenPersistenceTarget,
   normalizeSpotifyContextUri,
+  normalizeSpotifyPlaylistId,
   normalizeSpotifyPlayableUri,
   refreshSpotifyAccessToken,
   saveSpotifyRefreshToken,
@@ -72,6 +73,21 @@ describe("Spotify helpers", () => {
     expect(
       normalizeSpotifyContextUri("https://open.spotify.com/playlist/playlist123"),
     ).toBe("spotify:playlist:playlist123");
+  });
+
+  it("normalizes playlist IDs, URIs, and URLs", () => {
+    expect(normalizeSpotifyPlaylistId("  abc123  ")).toBe("abc123");
+    expect(normalizeSpotifyPlaylistId("spotify:playlist:abc123")).toBe(
+      "abc123",
+    );
+    expect(
+      normalizeSpotifyPlaylistId(
+        "https://open.spotify.com/playlist/abc123?si=ignored",
+      ),
+    ).toBe("abc123");
+    expect(() => normalizeSpotifyPlaylistId("not a playlist")).toThrow(
+      "Invalid Spotify playlist ID, URI, or URL",
+    );
   });
 
   it("rejects playable items as playback contexts", () => {

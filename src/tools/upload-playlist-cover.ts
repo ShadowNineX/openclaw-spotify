@@ -1,4 +1,4 @@
-import { getSpotifyUserClient } from "../spotify";
+import { getSpotifyPlaylistReference, getSpotifyUserClient } from "../spotify";
 import { preparePlaylistCoverImage } from "../playlist-cover-image";
 import { uploadPlaylistCoverSchema } from "./schemas";
 import type { SpotifyTool, SpotifyToolFactory } from "./types";
@@ -15,14 +15,17 @@ export function defineUploadPlaylistCoverTool(
     async execute(params, config, context) {
       const preparedImage = await preparePlaylistCoverImage(params);
       const client = getSpotifyUserClient(config, context.api);
+      const playlist = await getSpotifyPlaylistReference(client, params.id);
 
       await client.playlists.uploadCustomCoverImage(
-        params.id,
+        playlist.id,
         preparedImage.jpegBase64,
       );
 
       return {
-        id: params.id,
+        id: playlist.id,
+        name: playlist.name,
+        playlist,
         uploaded: true,
         image: {
           byteLength: preparedImage.byteLength,

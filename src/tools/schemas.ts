@@ -96,7 +96,7 @@ export const albumSchema = Type.Object(
 export const playlistSchema = Type.Object(
   {
     id: Type.String({
-      description: "Spotify playlist ID.",
+      description: "Spotify playlist ID, URI, or open.spotify.com URL.",
       minLength: 1,
     }),
     market: Type.Optional(marketSchema),
@@ -145,7 +145,7 @@ export const createPlaylistSchema = Type.Object(
 export const updatePlaylistSchema = Type.Object(
   {
     id: Type.String({
-      description: "Spotify playlist ID.",
+      description: "Spotify playlist ID, URI, or open.spotify.com URL.",
       minLength: 1,
     }),
     name: Type.Optional(
@@ -177,7 +177,7 @@ export const updatePlaylistSchema = Type.Object(
 export const uploadPlaylistCoverSchema = Type.Object(
   {
     id: Type.String({
-      description: "Spotify playlist ID.",
+      description: "Spotify playlist ID, URI, or open.spotify.com URL.",
       minLength: 1,
     }),
     imageUrl: Type.Optional(
@@ -231,7 +231,7 @@ export const uploadPlaylistCoverSchema = Type.Object(
 export const deletePlaylistSchema = Type.Object(
   {
     id: Type.String({
-      description: "Spotify playlist ID.",
+      description: "Spotify playlist ID, URI, or open.spotify.com URL.",
       minLength: 1,
     }),
   },
@@ -241,7 +241,7 @@ export const deletePlaylistSchema = Type.Object(
 export const playlistTracksEditSchema = Type.Object(
   {
     id: Type.String({
-      description: "Spotify playlist ID.",
+      description: "Spotify playlist ID, URI, or open.spotify.com URL.",
       minLength: 1,
     }),
     uris: Type.Array(
@@ -274,7 +274,7 @@ export const playlistTracksEditSchema = Type.Object(
 export const reorderPlaylistTracksSchema = Type.Object(
   {
     id: Type.String({
-      description: "Spotify playlist ID.",
+      description: "Spotify playlist ID, URI, or open.spotify.com URL.",
       minLength: 1,
     }),
     rangeStart: Type.Integer({

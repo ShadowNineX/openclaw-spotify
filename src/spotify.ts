@@ -561,6 +561,56 @@ export function normalizeSpotifyContextUri(value: string): string {
   throw new Error(`Invalid Spotify context URI or URL: ${value}`);
 }
 
+/** Accept the playlist formats people commonly paste into chat and API calls. */
+export function normalizeSpotifyPlaylistId(value: string): string {
+  const trimmed = value.trim();
+  const uriMatch = /^spotify:playlist:([A-Za-z0-9_-]+)$/.exec(trimmed);
+
+  if (uriMatch?.[1]) {
+    return uriMatch[1];
+  }
+
+  const url = parseSpotifyUrl(trimmed);
+
+  if (url?.type === "playlist") {
+    return url.id;
+  }
+
+  if (/^[A-Za-z0-9_-]+$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  throw new Error(`Invalid Spotify playlist ID, URI, or URL: ${value}`);
+}
+
+export async function getSpotifyPlaylistReference(
+  client: SpotifyClient,
+  value: string,
+): Promise<{ id: string; name?: string; uri: string; url: string }> {
+  const id = normalizeSpotifyPlaylistId(value);
+
+  try {
+    const playlist = await client.playlists.get(id);
+
+    return {
+      id,
+      name: playlist.name?.trim() || undefined,
+      uri: playlist.uri ?? `spotify:playlist:${id}`,
+      url:
+        playlist.external_urls?.spotify ??
+        `https://open.spotify.com/playlist/${id}`,
+    };
+  } catch {
+    // A metadata read can occasionally be unavailable even though a write is
+    // permitted. Keep the requested operation usable and return stable links.
+    return {
+      id,
+      uri: `spotify:playlist:${id}`,
+      url: `https://open.spotify.com/playlist/${id}`,
+    };
+  }
+}
+
 export function summarizeTrack(track: Track) {
   const source = track as SpotifyTrackReference;
   const artists = source.artists ?? [];

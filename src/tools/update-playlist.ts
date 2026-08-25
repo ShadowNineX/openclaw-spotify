@@ -1,4 +1,4 @@
-import { getSpotifyUserClient } from "../spotify";
+import { getSpotifyPlaylistReference, getSpotifyUserClient } from "../spotify";
 import { updatePlaylistSchema } from "./schemas";
 import type { SpotifyTool, SpotifyToolFactory } from "./types";
 
@@ -10,8 +10,9 @@ export function defineUpdatePlaylistTool(tool: SpotifyToolFactory): SpotifyTool 
     parameters: updatePlaylistSchema,
     async execute(params, config, context) {
       const client = getSpotifyUserClient(config, context.api);
+      const playlist = await getSpotifyPlaylistReference(client, params.id);
 
-      await client.playlists.changeDetails(params.id, {
+      await client.playlists.changeDetails(playlist.id, {
         name: params.name,
         description: params.description,
         public:
@@ -22,7 +23,12 @@ export function defineUpdatePlaylistTool(tool: SpotifyToolFactory): SpotifyTool 
       });
 
       return {
-        id: params.id,
+        id: playlist.id,
+        name: params.name?.trim() || playlist.name,
+        playlist: {
+          ...playlist,
+          name: params.name?.trim() || playlist.name,
+        },
         updated: true,
       };
     },

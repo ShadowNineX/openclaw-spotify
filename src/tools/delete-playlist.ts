@@ -1,4 +1,4 @@
-import { getSpotifyUserClient } from "../spotify";
+import { getSpotifyPlaylistReference, getSpotifyUserClient } from "../spotify";
 import { deletePlaylistSchema } from "./schemas";
 import type { SpotifyTool, SpotifyToolFactory } from "./types";
 
@@ -13,11 +13,14 @@ export function defineDeletePlaylistTool(
     parameters: deletePlaylistSchema,
     async execute(params, config, context) {
       const client = getSpotifyUserClient(config, context.api);
+      const playlist = await getSpotifyPlaylistReference(client, params.id);
 
-      await client.users.unfollowPlaylist(params.id);
+      await client.users.unfollowPlaylist(playlist.id);
 
       return {
-        id: params.id,
+        id: playlist.id,
+        name: playlist.name,
+        playlist,
         deleted: true,
       };
     },

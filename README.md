@@ -75,6 +75,13 @@ plugin saves the replacement token back to OpenClaw automatically.
 
 ## Tools
 
+Playlist inputs accept a Spotify ID, a `spotify:playlist:...` URI, or an
+`open.spotify.com/playlist/...` URL, so links copied from Spotify can be pasted
+directly. Playlist mutation results include the playlist's display name, URI,
+and clickable URL (while retaining its ID for follow-up tool calls). If Spotify
+temporarily refuses the metadata lookup, the write can still proceed and the
+result falls back to the normalized ID and stable Spotify links.
+
 - `spotify_search`: search tracks, artists, albums, and playlists.
 - `spotify_get_track`: get track metadata.
 - `spotify_get_artist`: get artist metadata and optional top tracks.

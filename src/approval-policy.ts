@@ -2,7 +2,11 @@ import type { Static, TSchema } from "typebox";
 import { Check } from "typebox/value";
 
 import type { SpotifyPluginConfig } from "./index";
-import { getSpotifyUserClient, type SpotifyRuntimeApi } from "./spotify";
+import {
+  getSpotifyUserClient,
+  normalizeSpotifyPlaylistId,
+  type SpotifyRuntimeApi,
+} from "./spotify";
 import {
   deletePlaylistSchema,
   playlistTracksEditSchema,
@@ -183,9 +187,10 @@ async function resolvePlaylistLabel(
 
   try {
     const client = getSpotifyUserClient(config, api);
-    const playlist = await client.playlists.get(id);
+    const normalizedId = normalizeSpotifyPlaylistId(id);
+    const playlist = await client.playlists.get(normalizedId);
 
-    return formatPlaylistLabel(id, playlist.name);
+    return formatPlaylistLabel(normalizedId, playlist.name);
   } catch {
     return id;
   }

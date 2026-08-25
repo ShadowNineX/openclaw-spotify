@@ -1,5 +1,6 @@
 import {
   getSpotifyUserClient,
+  getSpotifyPlaylistReference,
   normalizeSpotifyTrackUris,
 } from "../spotify";
 import { playlistTracksEditSchema } from "./schemas";
@@ -15,14 +16,17 @@ export function defineAddPlaylistTracksTool(
     parameters: playlistTracksEditSchema,
     async execute(params, config, context) {
       const client = getSpotifyUserClient(config, context.api);
+      const playlist = await getSpotifyPlaylistReference(client, params.id);
       const uris = normalizeSpotifyTrackUris(params.uris);
 
-      await client.playlists.addItems(params.id, uris, {
+      await client.playlists.addItems(playlist.id, uris, {
         position: params.position,
       });
 
       return {
-        id: params.id,
+        id: playlist.id,
+        name: playlist.name,
+        playlist,
         added: uris.length,
         uris,
       };

@@ -406,7 +406,7 @@ describe("Spotify tool plugin metadata", () => {
           },
           {},
         ),
-      ).resolves.toEqual({ id: "playlist-1", updated: true });
+      ).resolves.toMatchObject({ id: "playlist-1", updated: true });
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -482,6 +482,20 @@ describe("Spotify tool plugin metadata", () => {
         );
       }
 
+      if (href === "https://api.spotify.com/v1/playlists/playlist-1") {
+        return new Response(
+          JSON.stringify({
+            id: "playlist-1",
+            name: "Road trip",
+            uri: "spotify:playlist:playlist-1",
+            external_urls: {
+              spotify: "https://open.spotify.com/playlist/playlist-1",
+            },
+          }),
+          { status: 200 },
+        );
+      }
+
       return new Response("Unexpected test request", { status: 404 });
     }) as typeof fetch;
 
@@ -502,6 +516,12 @@ describe("Spotify tool plugin metadata", () => {
         ),
       ).resolves.toMatchObject({
         id: "playlist-1",
+        name: "Road trip",
+        playlist: {
+          id: "playlist-1",
+          name: "Road trip",
+          url: "https://open.spotify.com/playlist/playlist-1",
+        },
         removed: 1,
         uris: ["spotify:track:4iV5W9uYEdYUVa79Axb7Rh"],
       });

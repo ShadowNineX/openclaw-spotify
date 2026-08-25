@@ -2,6 +2,7 @@ import {
   clampSpotifyLimit,
   clampSpotifyOffset,
   getSpotifyUserClient,
+  normalizeSpotifyPlaylistId,
   resolveSpotifyMarket,
   summarizePage,
   summarizePlaylist,
@@ -19,9 +20,10 @@ export function definePlaylistTool(tool: SpotifyToolFactory): SpotifyTool {
     parameters: playlistSchema,
     async execute(params, config, context) {
       const client = getSpotifyUserClient(config, context.api);
+      const id = normalizeSpotifyPlaylistId(params.id);
       const market = resolveSpotifyMarket(params.market, config);
-      const playlist = await client.playlists.get(params.id, { market });
-      const tracks = await client.playlists.getItems(params.id, {
+      const playlist = await client.playlists.get(id, { market });
+      const tracks = await client.playlists.getItems(id, {
         market,
         limit: clampSpotifyLimit(params.limit, 20),
         offset: clampSpotifyOffset(params.offset),
