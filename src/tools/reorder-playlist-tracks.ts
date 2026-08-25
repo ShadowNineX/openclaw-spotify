@@ -1,4 +1,4 @@
-import { getSpotifyUserClient } from "../spotify";
+import { getSpotifyPlaylistReference, getSpotifyUserClient } from "../spotify";
 import { reorderPlaylistTracksSchema } from "./schemas";
 import type { SpotifyTool, SpotifyToolFactory } from "./types";
 
@@ -13,7 +13,8 @@ export function defineReorderPlaylistTracksTool(
     parameters: reorderPlaylistTracksSchema,
     async execute(params, config, context) {
       const client = getSpotifyUserClient(config, context.api);
-      const result = await client.playlists.updateItems(params.id, {
+      const playlist = await getSpotifyPlaylistReference(client, params.id);
+      const result = await client.playlists.updateItems(playlist.id, {
         range_start: params.rangeStart,
         insert_before: params.insertBefore,
         range_length: params.rangeLength ?? 1,
@@ -21,7 +22,9 @@ export function defineReorderPlaylistTracksTool(
       });
 
       return {
-        id: params.id,
+        id: playlist.id,
+        name: playlist.name,
+        playlist,
         snapshotId: result.snapshot_id,
       };
     },

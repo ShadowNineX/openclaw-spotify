@@ -16,7 +16,11 @@ Use these tools for Spotify catalog lookup, the authorized user's playlists, and
 - Inspect playback: `spotify_get_playback`, `spotify_get_currently_playing`, `spotify_list_devices`, or `spotify_get_queue`.
 - Control playback: `spotify_transfer_playback`, `spotify_play`, `spotify_pause`, `spotify_next`, `spotify_previous`, `spotify_seek`, `spotify_set_repeat`, `spotify_set_volume`, `spotify_set_shuffle`, or `spotify_add_to_queue`.
 
-Prefer IDs or URIs returned by Spotify tools instead of guessing identifiers. For online cover art, pass `imageUrl`; the cover tool prepares Spotify-compatible JPEG artwork.
+Prefer IDs, URIs, or URLs returned by Spotify tools instead of guessing
+identifiers. Playlist tools accept a playlist ID, Spotify URI, or copied Spotify
+URL. Mutation results include a human-readable playlist name and link when
+Spotify makes that metadata available. For online cover art, pass `imageUrl`;
+the cover tool prepares Spotify-compatible JPEG artwork.
 
 ## Playlist visibility is not privacy
 
