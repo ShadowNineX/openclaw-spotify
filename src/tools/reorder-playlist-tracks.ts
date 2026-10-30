@@ -12,7 +12,7 @@ export function defineReorderPlaylistTracksTool(
       "Move a range of tracks within one of the authorized user's editable playlists.",
     parameters: reorderPlaylistTracksSchema,
     async execute(params, config, context) {
-      const client = getSpotifyUserClient(config, context.api);
+      const client = await getSpotifyUserClient(config, context.api);
       const playlist = await getSpotifyPlaylistReference(client, params.id);
       const result = await client.playlists.updateItems(playlist.id, {
         range_start: params.rangeStart,

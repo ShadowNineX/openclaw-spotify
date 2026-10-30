@@ -12,7 +12,7 @@ export async function preparePlaylistTrackEdit(
   api?: SpotifyRuntimeApi,
 ) {
   const uris = normalizeSpotifyTrackUris(params.uris);
-  const client = getSpotifyUserClient(config, api);
+  const client = await getSpotifyUserClient(config, api);
   const playlist = await getSpotifyPlaylistReference(client, params.id);
   return { client, playlist, uris };
 }

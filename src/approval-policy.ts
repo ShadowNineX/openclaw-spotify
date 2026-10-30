@@ -201,7 +201,7 @@ async function resolvePlaylistLabel(
 
   const url = `https://open.spotify.com/playlist/${normalizedId}`;
   try {
-    const client = getSpotifyUserClient(config ?? {}, api);
+    const client = await getSpotifyUserClient(config ?? {}, api);
     const playlist = await client.playlists.get(normalizedId);
     const name = playlist.name?.trim();
     return { label: name ? JSON.stringify(name) : url, name, url };

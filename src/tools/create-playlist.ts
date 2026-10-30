@@ -9,7 +9,7 @@ export function defineCreatePlaylistTool(tool: SpotifyToolFactory): SpotifyTool 
     description: "Create a playlist for the authorized Spotify user.",
     parameters: createPlaylistSchema,
     async execute(params, config, context) {
-      const client = getSpotifyUserClient(config, context.api);
+      const client = await getSpotifyUserClient(config, context.api);
       const collaborative = params.collaborative === true;
       const hiddenFromProfile = collaborative || params.hiddenFromProfile !== false;
       const playlist = await client.playlists.create({

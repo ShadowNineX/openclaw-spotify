@@ -149,9 +149,9 @@ describe("Spotify approval hook", () => {
     const fetch = mockSpotify();
     const handler = registerHook({ clientId: "saved-approval-client", clientSecret: "saved-approval-secret" }, {
       state: {
-        openSyncKeyedStore: <T>() => ({
-          register: vi.fn(),
-          lookup: () => ({ refreshToken: "saved-approval-token" }) as T,
+        openKeyedStoreV2: <T>() => ({
+          register: vi.fn(async () => undefined),
+          lookup: async () => ({ refreshToken: "saved-approval-token" }) as T,
         }),
       },
     });

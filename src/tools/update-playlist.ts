@@ -9,7 +9,7 @@ export function defineUpdatePlaylistTool(tool: SpotifyToolFactory): SpotifyTool 
     description: "Update playlist name, description, profile visibility, or collaboration.",
     parameters: updatePlaylistSchema,
     async execute(params, config, context) {
-      const client = getSpotifyUserClient(config, context.api);
+      const client = await getSpotifyUserClient(config, context.api);
       const playlist = await getSpotifyPlaylistReference(client, params.id);
 
       await client.playlists.changeDetails(playlist.id, {

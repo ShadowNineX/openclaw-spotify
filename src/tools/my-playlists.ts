@@ -16,7 +16,7 @@ export function defineMyPlaylistsTool(tool: SpotifyToolFactory): SpotifyTool {
       "List one page of the authorized Spotify user's playlists. Use nextOffset when hasMore is true to read the next page.",
     parameters: myPlaylistsSchema,
     async execute(params, config, context) {
-      const client = getSpotifyUserClient(config, context.api);
+      const client = await getSpotifyUserClient(config, context.api);
       const playlists = await client.playlists.getCurrentUserPlaylists({
         limit: clampSpotifyLimit(params.limit, 20),
         offset: clampSpotifyOffset(params.offset),

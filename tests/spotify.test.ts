@@ -191,9 +191,9 @@ describe("Spotify helpers", () => {
     const api: SpotifyRuntimeApi = {
       runtime: {
         state: {
-          openSyncKeyedStore: <T>() => ({
-            lookup: (key: string) => records.get(key) as T | undefined,
-            register: (key: string, value: T) => {
+          openKeyedStoreV2: <T>() => ({
+            lookup: async (key: string) => records.get(key) as T | undefined,
+            register: async (key: string, value: T) => {
               records.set(key, value as SpotifyOAuthTokenRecord);
             },
           }),
@@ -246,9 +246,9 @@ describe("Spotify helpers", () => {
     const api: SpotifyRuntimeApi = {
       runtime: {
         state: {
-          openSyncKeyedStore: <T>() => ({
-            lookup: (key: string) => records.get(key) as T | undefined,
-            register: (key: string, value: T) => {
+          openKeyedStoreV2: <T>() => ({
+            lookup: async (key: string) => records.get(key) as T | undefined,
+            register: async (key: string, value: T) => {
               records.set(key, value as SpotifyOAuthTokenRecord);
             },
           }),
@@ -314,7 +314,7 @@ describe("Spotify helpers", () => {
     }) as typeof fetch;
 
     try {
-      const client = getSpotifyUserClient(
+      const client = await getSpotifyUserClient(
         {
           clientId: "client-id",
           clientSecret: "client-secret",
@@ -341,9 +341,9 @@ describe("Spotify helpers", () => {
     const api: SpotifyRuntimeApi = {
       runtime: {
         state: {
-          openSyncKeyedStore: <T>() => ({
-            lookup: (key: string) => records.get(key) as T | undefined,
-            register: (key: string, value: T) => {
+          openKeyedStoreV2: <T>() => ({
+            lookup: async (key: string) => records.get(key) as T | undefined,
+            register: async (key: string, value: T) => {
               records.set(key, value as SpotifyOAuthTokenRecord);
             },
           }),
@@ -422,7 +422,7 @@ describe("Spotify helpers", () => {
     }) as typeof fetch;
 
     try {
-      const client = getSpotifyUserClient(
+      const client = await getSpotifyUserClient(
         {
           clientId: "rotating-client-id",
           clientSecret: "rotating-client-secret",
@@ -521,9 +521,9 @@ describe("Spotify helpers", () => {
           },
         },
         state: {
-          openSyncKeyedStore: <T>() => ({
-            lookup: () => undefined,
-            register: (_key: string, _value: T) => {
+          openKeyedStoreV2: <T>() => ({
+            lookup: async () => undefined,
+            register: async (_key: string, _value: T) => {
               throw new Error("EROFS state");
             },
           }),
@@ -593,7 +593,7 @@ describe("Spotify helpers", () => {
     }) as typeof fetch;
 
     try {
-      const client = getSpotifyUserClient(
+      const client = await getSpotifyUserClient(
         {
           clientId: "readonly-client-id",
           clientSecret: "readonly-client-secret",

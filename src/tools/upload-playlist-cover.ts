@@ -14,7 +14,7 @@ export function defineUploadPlaylistCoverTool(
     parameters: uploadPlaylistCoverSchema,
     async execute(params, config, context) {
       const preparedImage = await preparePlaylistCoverImage(params);
-      const client = getSpotifyUserClient(config, context.api);
+      const client = await getSpotifyUserClient(config, context.api);
       const playlist = await getSpotifyPlaylistReference(client, params.id);
 
       await client.playlists.uploadCustomCoverImage(

@@ -29,7 +29,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
         "Get the authorized user's current Spotify playback state and active item.",
       parameters: playbackReadSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
         const playback = await client.player.getPlaybackState({
           market: resolveSpotifyMarket(params.market, config),
           additional_types: "episode",
@@ -44,7 +44,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Get the authorized user's currently playing Spotify item.",
       parameters: playbackReadSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
         const playback = await client.player.getCurrentlyPlaying({
           market: resolveSpotifyMarket(params.market, config),
           additional_types: "episode",
@@ -60,7 +60,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
         "List the authorized user's available Spotify Connect devices.",
       parameters: playbackDeviceSchema,
       async execute(_params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
         const devices = await client.player.getAvailableDevices();
 
         return {
@@ -74,7 +74,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Get the authorized user's Spotify playback queue.",
       parameters: playbackDeviceSchema,
       async execute(_params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
         const queue = await client.player.getQueue();
 
         return summarizeQueue(queue);
@@ -86,7 +86,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Transfer Spotify playback to a Spotify Connect device.",
       parameters: playbackTransferSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
 
         await client.player.transferPlayback([params.deviceId], {
           play: params.play,
@@ -106,7 +106,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
         "Start or resume Spotify playback, optionally with a context or specific tracks.",
       parameters: playbackPlaySchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
         const contextUri = params.contextUri
           ? normalizeSpotifyContextUri(params.contextUri)
           : undefined;
@@ -146,7 +146,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Pause Spotify playback.",
       parameters: playbackDeviceSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
 
         await client.player.pause({
           device_id: params.deviceId,
@@ -164,7 +164,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Skip to the next Spotify playback item.",
       parameters: playbackDeviceSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
 
         await client.player.skipToNext({
           device_id: params.deviceId,
@@ -182,7 +182,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Skip to the previous Spotify playback item.",
       parameters: playbackDeviceSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
 
         await client.player.skipToPrevious({
           device_id: params.deviceId,
@@ -200,7 +200,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Seek Spotify playback to a position in milliseconds.",
       parameters: playbackSeekSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
 
         await client.player.seek(params.positionMs, {
           device_id: params.deviceId,
@@ -218,7 +218,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Set Spotify repeat mode.",
       parameters: playbackRepeatSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
 
         await client.player.setRepeat(params.state, {
           device_id: params.deviceId,
@@ -236,7 +236,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Set Spotify playback volume from 0 to 100.",
       parameters: playbackVolumeSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
 
         await client.player.setVolume(params.volumePercent, {
           device_id: params.deviceId,
@@ -254,7 +254,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Enable or disable Spotify shuffle.",
       parameters: playbackShuffleSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
 
         await client.player.setShuffle(params.state, {
           device_id: params.deviceId,
@@ -272,7 +272,7 @@ export function definePlaybackTools(tool: SpotifyToolFactory): SpotifyTool[] {
       description: "Add a Spotify track or episode to the playback queue.",
       parameters: playbackQueueAddSchema,
       async execute(params, config, context) {
-        const client = getSpotifyUserClient(config, context.api);
+        const client = await getSpotifyUserClient(config, context.api);
         const uri = normalizeSpotifyPlayableUri(params.uri);
 
         await client.player.addToQueue(uri, {

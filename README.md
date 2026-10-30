@@ -78,6 +78,10 @@ token as revoked, the plugin tries the next configured token source before
 failing. When Spotify rotates a refresh token during an API token refresh, the
 plugin saves the replacement token back to OpenClaw automatically.
 
+Plugin-state token storage uses awaited async operations, preferring OpenClaw's
+V2 keyed store when available. Older supported gateways use the async keyed
+store with the same namespace and key, preserving existing saved logins.
+
 ## Tools
 
 Playlist inputs accept a Spotify ID, a `spotify:playlist:...` URI, or an

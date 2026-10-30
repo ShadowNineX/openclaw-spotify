@@ -6,6 +6,9 @@ verified registry publication dates. Each version links to its relevant commits.
 
 ## [0.1.10] - 2026-10-30
 
+- Migrate saved OAuth token storage to awaited async keyed-store operations,
+  preferring V2 on newer gateways and retaining the async API on older supported
+  versions. Preserve existing saved logins and isolate rotated tokens by runtime.
 - Fix playlist approval prompts to read the registered plugin configuration, so
   playlist names and per-action approval settings work with OpenClaw's typed hooks.
 - Show playlist names in approval titles and descriptions, with a Spotify link

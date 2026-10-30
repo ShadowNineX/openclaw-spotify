@@ -19,7 +19,7 @@ export function definePlaylistTool(tool: SpotifyToolFactory): SpotifyTool {
       "Get a Spotify playlist and one page of tracks. Use nextOffset when hasMore is true to read the next page; each track has its absolute zero-based playlist position.",
     parameters: playlistSchema,
     async execute(params, config, context) {
-      const client = getSpotifyUserClient(config, context.api);
+      const client = await getSpotifyUserClient(config, context.api);
       const id = normalizeSpotifyPlaylistId(params.id);
       const market = resolveSpotifyMarket(params.market, config);
       const playlist = await client.playlists.get(id, { market });

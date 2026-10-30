@@ -118,9 +118,20 @@ export type SpotifyRefreshTokenPersistenceResult = {
 };
 
 type SpotifyTokenStore<T> = {
-  register(key: string, value: T): void;
-  lookup(key: string): T | undefined;
+  register(key: string, value: T): Promise<void>;
+  lookup(key: string): Promise<T | undefined>;
 };
+
+type SpotifyTokenStoreOptions = {
+  namespace: string;
+  maxEntries: number;
+  defaultTtlMs?: number;
+  env?: NodeJS.ProcessEnv;
+};
+
+type SpotifyTokenStoreOpener = <T>(
+  options: SpotifyTokenStoreOptions,
+) => SpotifyTokenStore<T>;
 
 type MutableRecord = Record<string, unknown>;
 type SpotifyRefreshTokenSource =
@@ -149,12 +160,8 @@ export type SpotifyRuntimeApi = {
       }) => Promise<unknown>;
     };
     state?: {
-      openSyncKeyedStore?: <T>(options: {
-        namespace: string;
-        maxEntries: number;
-        defaultTtlMs?: number;
-        env?: NodeJS.ProcessEnv;
-      }) => SpotifyTokenStore<T>;
+      openKeyedStoreV2?: SpotifyTokenStoreOpener;
+      openKeyedStore?: SpotifyTokenStoreOpener;
     };
   };
 };
@@ -199,6 +206,7 @@ let cachedUserClient:
   | {
       cacheKey: string;
       client: SpotifyClient;
+      api: SpotifyRuntimeApi | undefined;
     }
   | undefined;
 const lastSavedRefreshTokensByRuntime = new WeakMap<
@@ -247,19 +255,19 @@ export function getSpotifyClient(config: SpotifyPluginConfig): SpotifyClient {
   return client;
 }
 
-export function getSpotifyUserClient(
+export async function getSpotifyUserClient(
   config: SpotifyPluginConfig,
   api?: SpotifyRuntimeApi,
-): SpotifyClient {
+): Promise<SpotifyClient> {
   const credentials = resolveSpotifyCredentials(config);
-  const refreshTokens = resolveSpotifyRefreshTokenCandidates(config, api);
+  const refreshTokens = await resolveSpotifyRefreshTokenCandidates(config, api);
   const cacheKey = [
     credentials.clientId,
     credentials.clientSecret,
     ...refreshTokens.map((token) => `${token.source}:${token.refreshToken}`),
   ].join(":");
 
-  if (cachedUserClient?.cacheKey === cacheKey) {
+  if (cachedUserClient?.cacheKey === cacheKey && cachedUserClient.api === api) {
     return cachedUserClient.client;
   }
 
@@ -276,7 +284,7 @@ export function getSpotifyUserClient(
     getAccessToken: () => tokenProvider.getAccessToken(),
   });
 
-  cachedUserClient = { cacheKey, client };
+  cachedUserClient = { cacheKey, client, api };
   return client;
 }
 
@@ -292,7 +300,11 @@ export function getSpotifyRefreshTokenPersistenceTarget(
     return "openclaw-config";
   }
 
-  if (openSpotifyOAuthStore(api)) {
+  const state = api?.runtime?.state;
+  if (
+    typeof state?.openKeyedStoreV2 === "function" ||
+    typeof state?.openKeyedStore === "function"
+  ) {
     return "openclaw-plugin-state";
   }
 
@@ -314,7 +326,7 @@ export async function saveSpotifyRefreshToken(
     return configResult;
   }
 
-  const stateResult = saveSpotifyRefreshTokenToState(api, token);
+  const stateResult = await saveSpotifyRefreshTokenToState(api, token);
 
   if (stateResult.persisted) {
     return stateResult;
@@ -336,21 +348,17 @@ export async function saveSpotifyRefreshToken(
   };
 }
 
-function saveSpotifyRefreshTokenToState(
+async function saveSpotifyRefreshTokenToState(
   api: SpotifyRuntimeApi | undefined,
   token: Omit<SpotifyOAuthTokenRecord, "savedAt">,
-): SpotifyRefreshTokenPersistenceResult {
-  const store = openSpotifyOAuthStore(api);
-
-  if (!store) {
-    return {
-      persisted: false,
-      storage: "manual-config-or-env",
-    };
-  }
-
+): Promise<SpotifyRefreshTokenPersistenceResult> {
   try {
-    store.register(SPOTIFY_REFRESH_TOKEN_STORE_KEY, {
+    const store = openSpotifyOAuthStore(api);
+    if (!store) {
+      return { persisted: false, storage: "manual-config-or-env" };
+    }
+
+    await store.register(SPOTIFY_REFRESH_TOKEN_STORE_KEY, {
       ...token,
       savedAt: new Date().toISOString(),
     });
@@ -1014,10 +1022,13 @@ async function refreshSpotifyAccessTokenFromCandidates(
   );
 }
 
-function resolveSpotifyRefreshTokenCandidates(
+async function resolveSpotifyRefreshTokenCandidates(
   config: SpotifyPluginConfig,
   api?: SpotifyRuntimeApi,
-): SpotifyRefreshTokenCandidate[] {
+): Promise<SpotifyRefreshTokenCandidate[]> {
+  const storedRefreshToken = await readStoredSpotifyRefreshToken(api);
+  // A login may finish while the store read is pending. Read the runtime's
+  // newest saved token after that await so the completed login still wins.
   const candidates = dedupeRefreshTokenCandidates([
     {
       refreshToken: firstNonEmptyString(
@@ -1026,7 +1037,7 @@ function resolveSpotifyRefreshTokenCandidates(
       source: "last-oauth-login",
     },
     {
-      refreshToken: readStoredSpotifyRefreshToken(api),
+      refreshToken: storedRefreshToken,
       source: "openclaw-plugin-state",
     },
     {
@@ -1097,11 +1108,11 @@ function resolveSpotifyRedirectUri(config: SpotifyPluginConfig): string {
   );
 }
 
-function readStoredSpotifyRefreshToken(
+async function readStoredSpotifyRefreshToken(
   api?: SpotifyRuntimeApi,
-): string | undefined {
+): Promise<string | undefined> {
   const store = openSpotifyOAuthStore(api);
-  const record = store?.lookup(SPOTIFY_REFRESH_TOKEN_STORE_KEY);
+  const record = await store?.lookup(SPOTIFY_REFRESH_TOKEN_STORE_KEY);
 
   return firstNonEmptyString(record?.refreshToken);
 }
@@ -1109,14 +1120,14 @@ function readStoredSpotifyRefreshToken(
 function openSpotifyOAuthStore(
   api?: SpotifyRuntimeApi,
 ): SpotifyTokenStore<SpotifyOAuthTokenRecord> | undefined {
-  try {
-    return api?.runtime?.state?.openSyncKeyedStore?.<SpotifyOAuthTokenRecord>({
-      namespace: SPOTIFY_OAUTH_STORE_NAMESPACE,
-      maxEntries: 1,
-    });
-  } catch {
-    return undefined;
+  const state = api?.runtime?.state;
+  const options = { namespace: SPOTIFY_OAUTH_STORE_NAMESPACE, maxEntries: 1 };
+  if (typeof state?.openKeyedStoreV2 === "function") {
+    return state.openKeyedStoreV2<SpotifyOAuthTokenRecord>(options);
   }
+
+  // Older supported gateways expose the async data operations on this opener.
+  return state?.openKeyedStore?.<SpotifyOAuthTokenRecord>(options);
 }
 
 function firstNonEmptyString(...values: unknown[]): string | undefined {
