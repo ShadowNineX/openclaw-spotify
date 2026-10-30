@@ -2,6 +2,8 @@
 
 Plain OpenClaw plugin for Spotify catalog integrations.
 
+See the [changelog](changelog.md) for version history.
+
 Requires OpenClaw **2026.6.11 or newer**. The SDK used for development can be
 newer without requiring users to upgrade to the latest gateway.
 
