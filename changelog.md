@@ -4,6 +4,13 @@ Changes are reconstructed from version changes in `package.json` and the Git
 history on `main`. Dates reflect those version changes, rather than independently
 verified registry publication dates. Each version links to its relevant commits.
 
+## [0.1.11] - 2026-10-30
+
+- Prepare a new package version after the `0.1.10` ClawHub publication attempt
+  failed because its scanner could not return a verdict.
+- Retain the playlist approval, playlist reading, and async OAuth storage fixes
+  from `0.1.10`; no runtime behavior changes in this version bump.
+
 ## [0.1.10] - 2026-10-30
 
 - Migrate saved OAuth token storage to awaited async keyed-store operations,
@@ -122,7 +129,8 @@ verified registry publication dates. Each version links to its relevant commits.
 - Add client-credentials access for catalog requests and a PKCE OAuth callback
   flow for user-authorized operations.
 
-[0.1.10]: https://github.com/ShadowNineX/openclaw-spotify/compare/2426a05...bdfd913
+[0.1.11]: https://github.com/ShadowNineX/openclaw-spotify/compare/a46ae60...main
+[0.1.10]: https://github.com/ShadowNineX/openclaw-spotify/compare/2426a05...a46ae60
 [0.1.9]: https://github.com/ShadowNineX/openclaw-spotify/compare/766283b...2426a05
 [0.1.8]: https://github.com/ShadowNineX/openclaw-spotify/compare/336dbb4...766283b
 [0.1.7]: https://github.com/ShadowNineX/openclaw-spotify/compare/385b177...336dbb4
