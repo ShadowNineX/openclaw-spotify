@@ -1,8 +1,4 @@
-import {
-  getSpotifyUserClient,
-  getSpotifyPlaylistReference,
-  normalizeSpotifyTrackUris,
-} from "../spotify";
+import { preparePlaylistTrackEdit } from "./playlist-track-edit";
 import { playlistTracksEditSchema } from "./schemas";
 import type { SpotifyTool, SpotifyToolFactory } from "./types";
 
@@ -16,11 +12,13 @@ export function defineRemovePlaylistTracksTool(
       "Remove tracks from one of the authorized user's editable playlists.",
     parameters: playlistTracksEditSchema,
     async execute(params, config, context) {
-      const client = getSpotifyUserClient(config, context.api);
-      const playlist = await getSpotifyPlaylistReference(client, params.id);
-      const uris = normalizeSpotifyTrackUris(params.uris);
+      const { client, playlist, uris } = await preparePlaylistTrackEdit(
+        params,
+        config,
+        context.api,
+      );
 
-      await client.playlists.removeItems(playlist.id, {
+      const result = await client.playlists.removeItems(playlist.id, {
         items: uris.map((uri) => ({ uri })),
         snapshot_id: params.snapshotId,
       });
@@ -29,6 +27,7 @@ export function defineRemovePlaylistTracksTool(
         id: playlist.id,
         name: playlist.name,
         playlist,
+        snapshotId: result.snapshot_id,
         removed: uris.length,
         uris,
       };

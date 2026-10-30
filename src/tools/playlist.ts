@@ -16,7 +16,7 @@ export function definePlaylistTool(tool: SpotifyToolFactory): SpotifyTool {
     name: "spotify_get_playlist",
     label: "Spotify Playlist",
     description:
-      "Get Spotify catalog metadata and tracks for a public playlist by Spotify playlist ID.",
+      "Get a Spotify playlist and one page of tracks. Use nextOffset when hasMore is true to read the next page; each track has its absolute zero-based playlist position.",
     parameters: playlistSchema,
     async execute(params, config, context) {
       const client = getSpotifyUserClient(config, context.api);
@@ -29,9 +29,17 @@ export function definePlaylistTool(tool: SpotifyToolFactory): SpotifyTool {
         offset: clampSpotifyOffset(params.offset),
       });
 
+      const trackPage = summarizePage(tracks, summarizePlaylistTrack);
+
       return {
         playlist: summarizePlaylist(playlist),
-        tracks: summarizePage(tracks, summarizePlaylistTrack),
+        tracks: {
+          ...trackPage,
+          items: trackPage.items.map((item, index) => ({
+            position: tracks.offset + index,
+            ...item,
+          })),
+        },
       };
     },
   });

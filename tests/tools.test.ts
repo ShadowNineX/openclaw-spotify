@@ -1,5 +1,5 @@
 import { getToolPluginMetadata } from "openclaw/plugin-sdk/tool-plugin";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import entry from "../index";
 import { buildSpotifyToolApproval } from "../src/approval-policy";
@@ -8,6 +8,14 @@ import { definePlaylistTool } from "../src/tools/playlist";
 import { defineRemovePlaylistTracksTool } from "../src/tools/remove-playlist-tracks";
 import { defineUpdatePlaylistTool } from "../src/tools/update-playlist";
 import { defineUploadPlaylistCoverTool } from "../src/tools/upload-playlist-cover";
+
+beforeEach(() => {
+  vi.stubEnv("SPOTIFY_CLIENT_ID", undefined);
+  vi.stubEnv("SPOTIFY_CLIENT_SECRET", undefined);
+  vi.stubEnv("SPOTIFY_REFRESH_TOKEN", undefined);
+});
+
+afterEach(() => vi.unstubAllEnvs());
 
 const spotifyToolNames = [
   "spotify_search",
@@ -113,11 +121,11 @@ describe("Spotify tool plugin metadata", () => {
       requireApproval: {
         title: "Delete Spotify playlist",
         description:
-          "Delete playlist playlist-1 from the authorized user's library.",
+          "Remove playlist https://open.spotify.com/playlist/playlist-1 from your Spotify library.\nPlaylist name unavailable; check the link before approving.",
         severity: "critical",
         allowedDecisions: ["allow-once", "deny"],
         timeoutMs: 120_000,
-        timeoutBehavior: "deny",
+        timeoutReason: "Spotify playlist change was not approved in time.",
       },
     });
   });
@@ -184,23 +192,25 @@ describe("Spotify tool plugin metadata", () => {
 
     try {
       await expect(
-        buildSpotifyToolApproval({
-          context: {
+        buildSpotifyToolApproval(
+          {
+            toolName: "spotify_delete_playlist",
+            params: {
+              id: "playlist-1",
+            },
+          },
+          {
             pluginConfig: {
               clientId: "client-id",
               clientSecret: "client-secret",
               refreshToken: "refresh-token",
             },
           },
-          toolName: "spotify_delete_playlist",
-          params: {
-            id: "playlist-1",
-          },
-        }),
+        ),
       ).resolves.toMatchObject({
         requireApproval: {
           description:
-            'Delete playlist "Road trip" (id: playlist-1) from the authorized user\'s library.',
+            'Remove playlist "Road trip" from your Spotify library.\nhttps://open.spotify.com/playlist/playlist-1',
         },
       });
     } finally {
@@ -809,7 +819,7 @@ describe("Spotify tool plugin metadata", () => {
     expect(uploadedCoverBody).not.toContain("data:image");
   });
 
-  it("falls back to playlist IDs when no display name is available", async () => {
+  it("falls back to playlist links when no display name is available", async () => {
     expect(
       await buildSpotifyToolApproval({
         toolName: "spotify_remove_playlist_tracks",
@@ -820,15 +830,21 @@ describe("Spotify tool plugin metadata", () => {
       }),
     ).toMatchObject({
       requireApproval: {
-        description: "Remove 1 track(s) from playlist playlist-1.",
+        description: "Remove 1 track from playlist https://open.spotify.com/playlist/playlist-1.\nPlaylist name unavailable; check the link before approving.",
       },
     });
   });
 
   it("lets operators configure Spotify playlist approvals per action", async () => {
     expect(
-      await buildSpotifyToolApproval({
-        context: {
+      await buildSpotifyToolApproval(
+        {
+          toolName: "spotify_update_playlist",
+          params: {
+            id: "playlist-1",
+          },
+        },
+        {
           pluginConfig: {
             playlistApprovals: {
               update: "allow",
@@ -836,16 +852,18 @@ describe("Spotify tool plugin metadata", () => {
             },
           },
         },
-        toolName: "spotify_update_playlist",
-        params: {
-          id: "playlist-1",
-        },
-      }),
+      ),
     ).toBeUndefined();
 
     expect(
-      await buildSpotifyToolApproval({
-        context: {
+      await buildSpotifyToolApproval(
+        {
+          toolName: "spotify_delete_playlist",
+          params: {
+            id: "playlist-1",
+          },
+        },
+        {
           pluginConfig: {
             playlistApprovals: {
               update: "allow",
@@ -853,11 +871,7 @@ describe("Spotify tool plugin metadata", () => {
             },
           },
         },
-        toolName: "spotify_delete_playlist",
-        params: {
-          id: "playlist-1",
-        },
-      }),
+      ),
     ).toMatchObject({
       requireApproval: {
         title: "Delete Spotify playlist",

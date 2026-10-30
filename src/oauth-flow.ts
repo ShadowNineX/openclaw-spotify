@@ -170,13 +170,6 @@ export async function startSpotifyOauthFlow(
   };
 }
 
-export function getSpotifyOauthFlowStatus() {
-  return {
-    active: Boolean(activeFlow),
-    completed: completedFlow,
-  };
-}
-
 export async function waitForSpotifyOauthFlowCompletion(
   timeoutSeconds = 300,
 ): Promise<CompletedOauthFlow> {

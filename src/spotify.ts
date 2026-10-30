@@ -23,7 +23,7 @@ import type {
   Track,
 } from "@shadownine/foxify";
 
-export const SPOTIFY_SEARCH_TYPES = [
+const SPOTIFY_SEARCH_TYPES = [
   "track",
   "artist",
   "album",
@@ -160,32 +160,32 @@ export type SpotifyRuntimeApi = {
 };
 
 type SpotifyPlaylistSummarySource = {
-  collaborative: boolean;
-  description: string;
-  external_urls: {
-    spotify: string;
-  };
+  collaborative?: boolean;
+  description?: string;
+  external_urls?: SpotifyExternalUrls;
   followers?: {
     total: number;
   };
   id: string;
-  images: Array<{
+  images?: Array<{
     url: string;
   }>;
-  name: string;
+  items?: {
+    total: number;
+  } | null;
+  name?: string;
   owner?: {
-    display_name: string;
-    external_urls: {
-      spotify: string;
-    };
-    id: string;
-    uri: string;
+    display_name?: string;
+    external_urls?: SpotifyExternalUrls;
+    id?: string;
+    uri?: string;
   };
-  public: boolean | null;
+  public?: boolean | null;
+  snapshot_id?: string;
   tracks?: {
     total: number;
   } | null;
-  uri: string;
+  uri?: string;
 };
 
 let cachedClient:
@@ -225,7 +225,7 @@ export const SPOTIFY_USER_SCOPES = [
   ...SPOTIFY_PLAYLIST_SCOPES,
   ...SPOTIFY_PLAYBACK_SCOPES,
 ] as const;
-export const DEFAULT_SPOTIFY_REDIRECT_URI =
+const DEFAULT_SPOTIFY_REDIRECT_URI =
   "http://127.0.0.1:4377/callback";
 const SPOTIFY_OAUTH_STORE_NAMESPACE = "oauth";
 const SPOTIFY_REFRESH_TOKEN_STORE_KEY = "user-refresh-token";
@@ -622,6 +622,7 @@ export function summarizeTrack(track: Track) {
   const album = source.album;
 
   return {
+    type: "track",
     id: source.id,
     name: source.name,
     artists: artists.map((artist) => ({
@@ -704,35 +705,51 @@ export function summarizePlaylist(
           id: source.owner.id,
           displayName: source.owner.display_name,
           uri: source.owner.uri,
-          url: source.owner.external_urls.spotify,
+          url: source.owner.external_urls?.spotify,
         }
       : undefined,
     visibility: {
       hiddenFromProfile:
-        source.public === null ? null : !source.public,
-      searchable: source.public,
+        source.public == null ? null : !source.public,
+      searchable: source.public ?? null,
       linkAccessRestricted: false,
       note:
         "Profile visibility is not playlist privacy. Spotify's Web API cannot restrict access; anyone with the link can still open this playlist.",
     },
     collaborative: source.collaborative,
     followers: source.followers?.total,
-    totalTracks: trackReference?.total,
+    snapshotId: source.snapshot_id,
+    totalTracks: source.items?.total ?? trackReference?.total,
     image: source.images?.[0]?.url,
     uri: source.uri,
     url: source.external_urls?.spotify,
   };
 }
 
-export function summarizePlaylistTrack(item: PlaylistedTrack) {
+export function summarizePlaylistTrack(item: PlaylistedTrack | null) {
+  if (!item) {
+    return { unavailable: true };
+  }
+
   const track = item.track ?? item.item;
 
-  if (track?.type !== "track") {
+  if (!track) {
     return {
       addedAt: item.added_at,
-      type: track?.type,
-      name: track?.name,
-      uri: track?.uri,
+      unavailable: true,
+    };
+  }
+
+  if (track.type !== "track") {
+    const source = track as SpotifyEpisodeReference;
+
+    return {
+      addedAt: item.added_at,
+      type: source.type,
+      id: source.id,
+      name: source.name,
+      uri: source.uri,
+      url: source.external_urls?.spotify,
     };
   }
 
@@ -792,18 +809,45 @@ export function summarizeQueue(queue: Queue) {
   };
 }
 
-export function summarizePage<T>(
-  page: Page<T>,
-  summarize: (item: T) => unknown,
+export function summarizePage<T, TSummary>(
+  page: Page<T | null>,
+  summarize: (item: T, index: number) => TSummary,
 ) {
+  const hasMore = page.items.length > 0 && page.next !== null;
+  const nextOffset = hasMore
+    ? getSpotifyPageOffset(page.next) ?? page.offset + page.limit
+    : null;
+
   return {
     total: page.total,
     limit: page.limit,
     offset: page.offset,
     next: page.next,
     previous: page.previous,
-    items: page.items.map(summarize),
+    hasMore,
+    nextOffset,
+    items: page.items.map((item, index) =>
+      item === null ? { unavailable: true } : summarize(item, index),
+    ),
   };
+}
+
+function getSpotifyPageOffset(next: string | null): number | undefined {
+  if (!next) {
+    return undefined;
+  }
+
+  try {
+    const offset = new URL(next).searchParams.get("offset");
+
+    if (offset === null || !/^\d+$/.test(offset)) {
+      return undefined;
+    }
+
+    return Number(offset);
+  } catch {
+    return undefined;
+  }
 }
 
 function resolveSpotifyCredentials(
@@ -1217,10 +1261,7 @@ function summarizeTrackItem(item: TrackItem | null | undefined) {
   }
 
   if (item.type === "track") {
-    return {
-      type: "track",
-      ...summarizeTrack(item as Track),
-    };
+    return summarizeTrack(item as Track);
   }
 
   const episode = item as SpotifyEpisodeReference;

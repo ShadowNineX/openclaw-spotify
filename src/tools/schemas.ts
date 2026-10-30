@@ -1,25 +1,25 @@
 import { Type } from "typebox";
 
-export const marketSchema = Type.String({
+const marketSchema = Type.String({
   description: "ISO 3166-1 alpha-2 market code, for example US or SE.",
   minLength: 2,
   maxLength: 2,
 });
 
-export const limitSchema = Type.Integer({
+const limitSchema = Type.Integer({
   description: "Maximum results to return, from 1 to 50.",
   minimum: 1,
   maximum: 50,
   default: 10,
 });
 
-export const offsetSchema = Type.Integer({
+const offsetSchema = Type.Integer({
   description: "Zero-based result offset.",
   minimum: 0,
   default: 0,
 });
 
-export const searchTypeSchema = Type.Union([
+const searchTypeSchema = Type.Union([
   Type.Literal("track"),
   Type.Literal("artist"),
   Type.Literal("album"),

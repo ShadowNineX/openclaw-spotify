@@ -12,7 +12,8 @@ export function defineMyPlaylistsTool(tool: SpotifyToolFactory): SpotifyTool {
   return tool({
     name: "spotify_list_my_playlists",
     label: "Spotify My Playlists",
-    description: "List playlists for the authorized Spotify user.",
+    description:
+      "List one page of the authorized Spotify user's playlists. Use nextOffset when hasMore is true to read the next page.",
     parameters: myPlaylistsSchema,
     async execute(params, config, context) {
       const client = getSpotifyUserClient(config, context.api);

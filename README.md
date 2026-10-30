@@ -2,6 +2,9 @@
 
 Plain OpenClaw plugin for Spotify catalog integrations.
 
+Requires OpenClaw **2026.6.11 or newer**. The SDK used for development can be
+newer without requiring users to upgrade to the latest gateway.
+
 ## Files
 
 - `openclaw.plugin.json` declares the plugin manifest OpenClaw discovers.
@@ -129,8 +132,26 @@ Adding tracks and creating playlists do not prompt. Destructive actions like
 removing tracks or deleting a playlist are marked critical and only offer
 approve-once or deny. On headless/server setups, route plugin approvals with
 `approvals.plugin`; this is separate from exec approvals.
-The approval hook fetches the playlist name from Spotify before prompting when
-OAuth is configured, and falls back to the playlist ID if lookup is unavailable.
+The approval hook uses the registered plugin configuration and saved OAuth token
+to fetch the playlist name before prompting. Titles and descriptions show the
+name, with a Spotify link for identifying the target. If the name cannot be
+loaded, the prompt says so and asks you to check the link before approving.
+
+### Reading playlists
+
+Playlist reads and discovery return one page at a time. `hasMore` and
+`nextOffset` make the next tool call explicit: repeat the same request with
+`offset: nextOffset` until `hasMore` is false when you need the complete list.
+The existing `next` and `previous` Spotify URLs are also retained.
+
+`spotify_get_playlist` returns `playlist.snapshotId` for guarded edits and an
+absolute, zero-based `position` for every entry in `tracks.items`. Duplicate
+tracks keep their separate positions. Unavailable entries remain in place with
+`unavailable: true`; episodes include their type, ID, URI, and link. This keeps
+positions accurate even when an item cannot be played. Playlist totals support
+both Spotify's current `items` field and older `tracks` responses.
+Add, remove, and reorder results also return the updated `snapshotId` for
+subsequent guarded edits.
 
 Each protected playlist action is configurable. Set an action to `"allow"` if it
 should run without a plugin approval prompt:

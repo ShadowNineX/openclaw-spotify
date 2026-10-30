@@ -1,8 +1,4 @@
-import {
-  getSpotifyUserClient,
-  getSpotifyPlaylistReference,
-  normalizeSpotifyTrackUris,
-} from "../spotify";
+import { preparePlaylistTrackEdit } from "./playlist-track-edit";
 import { playlistTracksEditSchema } from "./schemas";
 import type { SpotifyTool, SpotifyToolFactory } from "./types";
 
@@ -15,11 +11,13 @@ export function defineAddPlaylistTracksTool(
     description: "Add tracks to one of the authorized user's editable playlists.",
     parameters: playlistTracksEditSchema,
     async execute(params, config, context) {
-      const client = getSpotifyUserClient(config, context.api);
-      const playlist = await getSpotifyPlaylistReference(client, params.id);
-      const uris = normalizeSpotifyTrackUris(params.uris);
+      const { client, playlist, uris } = await preparePlaylistTrackEdit(
+        params,
+        config,
+        context.api,
+      );
 
-      await client.playlists.addItems(playlist.id, uris, {
+      const result = await client.playlists.addItems(playlist.id, uris, {
         position: params.position,
       });
 
@@ -27,6 +25,7 @@ export function defineAddPlaylistTracksTool(
         id: playlist.id,
         name: playlist.name,
         playlist,
+        snapshotId: result.snapshot_id,
         added: uris.length,
         uris,
       };

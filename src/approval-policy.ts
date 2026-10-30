@@ -23,7 +23,7 @@ type SpotifyApprovalRequest = {
   severity: SpotifyApprovalSeverity;
   allowedDecisions: SpotifyApprovalDecision[];
   timeoutMs: number;
-  timeoutBehavior: "deny";
+  timeoutReason: string;
 };
 
 type SpotifyToolApprovalResult =
@@ -33,21 +33,22 @@ type SpotifyToolApprovalResult =
   | undefined;
 
 export type SpotifyToolCallEvent = {
-  context?: {
-    pluginConfig?: SpotifyPluginConfig;
-  };
   toolName: string;
   params?: unknown;
 };
 
-export type SpotifyApprovalApi = {
+type SpotifyApprovalRuntimeApi = SpotifyRuntimeApi & {
+  pluginConfig?: SpotifyPluginConfig;
+};
+
+export type SpotifyApprovalApi = SpotifyApprovalRuntimeApi & {
   on(
     event: "before_tool_call",
     handler: (
       event: SpotifyToolCallEvent,
     ) => SpotifyToolApprovalResult | Promise<SpotifyToolApprovalResult>,
   ): void;
-} & SpotifyRuntimeApi;
+};
 
 type SpotifyApprovalPolicy<Schema extends TSchema> = {
   action: SpotifyPlaylistApprovalAction;
@@ -77,7 +78,7 @@ const REMOVE_PLAYLIST_TRACKS_POLICY = {
   title: "Remove tracks from Spotify playlist",
   severity: "critical",
   describe: (params, playlistLabel) =>
-    `Remove ${params.uris.length} track(s) from playlist ${playlistLabel}.`,
+    `Remove ${params.uris.length} ${params.uris.length === 1 ? "track" : "tracks"} from playlist ${playlistLabel}.`,
 } satisfies SpotifyApprovalPolicy<typeof playlistTracksEditSchema>;
 
 const REORDER_PLAYLIST_TRACKS_POLICY = {
@@ -95,7 +96,7 @@ const DELETE_PLAYLIST_POLICY = {
   title: "Delete Spotify playlist",
   severity: "critical",
   describe: (_params, playlistLabel) =>
-    `Delete playlist ${playlistLabel} from the authorized user's library.`,
+    `Remove playlist ${playlistLabel} from your Spotify library.`,
 } satisfies SpotifyApprovalPolicy<typeof deletePlaylistSchema>;
 
 export function registerSpotifyApprovalPolicy(api: SpotifyApprovalApi): void {
@@ -104,34 +105,37 @@ export function registerSpotifyApprovalPolicy(api: SpotifyApprovalApi): void {
 
 export async function buildSpotifyToolApproval(
   event: SpotifyToolCallEvent,
-  api?: SpotifyRuntimeApi,
+  api?: SpotifyApprovalRuntimeApi,
 ): Promise<SpotifyToolApprovalResult> {
+  // Typed api.on hooks carry config on the registration API, not event.context.
+  const config = api?.pluginConfig;
+
   switch (event.toolName) {
     case "spotify_update_playlist":
       return buildApproval(
         event.params,
-        event.context?.pluginConfig,
+        config,
         api,
         UPDATE_PLAYLIST_POLICY,
       );
     case "spotify_remove_playlist_tracks":
       return buildApproval(
         event.params,
-        event.context?.pluginConfig,
+        config,
         api,
         REMOVE_PLAYLIST_TRACKS_POLICY,
       );
     case "spotify_reorder_playlist_tracks":
       return buildApproval(
         event.params,
-        event.context?.pluginConfig,
+        config,
         api,
         REORDER_PLAYLIST_TRACKS_POLICY,
       );
     case "spotify_delete_playlist":
       return buildApproval(
         event.params,
-        event.context?.pluginConfig,
+        config,
         api,
         DELETE_PLAYLIST_POLICY,
       );
@@ -151,20 +155,27 @@ async function buildApproval<Schema extends TSchema>(
   }
 
   let description = "Review this Spotify playlist change before it runs.";
+  let title: string = policy.title;
 
   if (Check(policy.schema, params)) {
-    const playlistLabel = await resolvePlaylistLabel(params.id, config, api);
-    description = policy.describe(params, playlistLabel);
+    const playlist = await resolvePlaylistLabel(params.id, config, api);
+    title = playlist.name
+      ? `${policy.title}: ${JSON.stringify(playlist.name)}`
+      : policy.title;
+    description = policy.describe(params, playlist.label);
+    description += playlist.name
+      ? `\n${playlist.url}`
+      : `\nPlaylist name unavailable; check ${playlist.url ? "the link" : "the playlist ID"} before approving.`;
   }
 
   return {
     requireApproval: {
-      title: policy.title,
+      title,
       description,
       severity: policy.severity,
       allowedDecisions: ["allow-once", "deny"],
       timeoutMs: 120_000,
-      timeoutBehavior: "deny",
+      timeoutReason: "Spotify playlist change was not approved in time.",
     },
   };
 }
@@ -180,24 +191,21 @@ async function resolvePlaylistLabel(
   id: string,
   config: SpotifyPluginConfig | undefined,
   api: SpotifyRuntimeApi | undefined,
-): Promise<string> {
-  if (!config) {
-    return id;
-  }
-
+): Promise<{ label: string; name?: string; url?: string }> {
+  let normalizedId: string;
   try {
-    const client = getSpotifyUserClient(config, api);
-    const normalizedId = normalizeSpotifyPlaylistId(id);
-    const playlist = await client.playlists.get(normalizedId);
-
-    return formatPlaylistLabel(normalizedId, playlist.name);
+    normalizedId = normalizeSpotifyPlaylistId(id);
   } catch {
-    return id;
+    return { label: JSON.stringify(id) };
   }
-}
 
-function formatPlaylistLabel(id: string, playlistName: string | undefined): string {
-  const name = playlistName?.trim();
-
-  return name ? `"${name}" (id: ${id})` : id;
+  const url = `https://open.spotify.com/playlist/${normalizedId}`;
+  try {
+    const client = getSpotifyUserClient(config ?? {}, api);
+    const playlist = await client.playlists.get(normalizedId);
+    const name = playlist.name?.trim();
+    return { label: name ? JSON.stringify(name) : url, name, url };
+  } catch {
+    return { label: url, url };
+  }
 }
