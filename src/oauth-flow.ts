@@ -13,14 +13,17 @@ import {
 } from "./spotify";
 
 type ActiveOauthFlow = {
+  callbackInProgress: boolean;
+  id: number;
   server: Server;
   state: string;
-  timeout: ReturnType<typeof setTimeout>;
+  timeout?: ReturnType<typeof setTimeout>;
 };
 
 type CompletedOauthFlow = {
   completedAt: string;
   error?: string;
+  flowId: number;
   persisted: boolean;
   scope?: string;
   storage: SpotifyRefreshTokenPersistenceResult["storage"];
@@ -28,6 +31,9 @@ type CompletedOauthFlow = {
 
 let activeFlow: ActiveOauthFlow | undefined;
 let completedFlow: CompletedOauthFlow | undefined;
+let startingFlowId = 0;
+let persistenceInFlight = false;
+let pendingListener: ActiveOauthFlow | undefined;
 
 export async function startSpotifyOauthFlow(
   config: SpotifyPluginConfig,
@@ -38,6 +44,13 @@ export async function startSpotifyOauthFlow(
     timeoutSeconds?: number;
   },
 ) {
+  if (pendingListener) {
+    throw new Error("Spotify OAuth login is busy starting its callback listener. Wait for it to finish before starting another login.");
+  }
+  if (persistenceInFlight) {
+    throw new Error("Spotify OAuth login is busy saving a previous refresh token. Wait for it to finish before starting another login.");
+  }
+  const flowId = ++startingFlowId;
   stopActiveFlow();
   completedFlow = undefined;
 
@@ -49,49 +62,68 @@ export async function startSpotifyOauthFlow(
     state,
     true,
   );
-  const redirectUrl = new URL(auth.redirectUri);
-
-  if (!isLocalhost(redirectUrl.hostname)) {
-    throw new Error(
-      "Spotify OAuth callback helper only supports localhost redirect URIs.",
-    );
+  if (startingFlowId !== flowId) {
+    throw new Error("Spotify OAuth login was superseded before it could start.");
   }
+  const redirectUrl = validateLoopbackRedirectUri(auth.redirectUri);
+  const flow: ActiveOauthFlow = {
+    callbackInProgress: false,
+    id: flowId,
+    server: undefined as unknown as Server,
+    state,
+  };
 
   const server = createServer(async (req, res) => {
-    const requestUrl = new URL(req.url ?? "/", auth.redirectUri);
+    let requestUrl: URL;
+    try {
+      requestUrl = new URL(req.url ?? "/", auth.redirectUri);
+    } catch {
+      writeText(res, 400, "Spotify OAuth callback URL is invalid.");
+      return;
+    }
 
     if (requestUrl.pathname !== redirectUrl.pathname) {
       writeText(res, 404, "Spotify OAuth callback route not found.");
       return;
     }
-
-    const error = requestUrl.searchParams.get("error");
-
-    if (error) {
-      writeHtml(res, 400, renderHtml("Spotify OAuth failed", error));
-      stopActiveFlow();
+    if (activeFlow !== flow) {
+      writeHtml(res, 409, renderHtml("Spotify OAuth unavailable", "This login is no longer active."));
+      return;
+    }
+    if (requestUrl.searchParams.get("state") !== state) {
+      writeHtml(res, 400, renderHtml("Spotify OAuth failed", "State mismatch."));
+      return;
+    }
+    if (flow.callbackInProgress) {
+      writeHtml(res, 409, renderHtml("Spotify OAuth in progress", "This callback is already being processed."));
       return;
     }
 
-    if (requestUrl.searchParams.get("state") !== state) {
-      writeHtml(
-        res,
-        400,
-        renderHtml("Spotify OAuth failed", "State mismatch."),
-      );
-      stopActiveFlow();
+    flow.callbackInProgress = true;
+    const callbackError = requestUrl.searchParams.get("error");
+    if (callbackError) {
+      const message = callbackError === "access_denied"
+        ? "Spotify authorization was cancelled."
+        : "Spotify authorization failed.";
+      completeFlow(flow, {
+        error: message,
+        persisted: false,
+        storage: "manual-config-or-env",
+      });
+      writeHtml(res, 400, renderHtml("Spotify OAuth failed", message));
+      stopFlow(flow);
       return;
     }
 
     const code = requestUrl.searchParams.get("code");
-
     if (!code) {
-      writeHtml(
-        res,
-        400,
-        renderHtml("Spotify OAuth failed", "Missing authorization code."),
-      );
-      stopActiveFlow();
+      completeFlow(flow, {
+        error: "Spotify OAuth callback did not include an authorization code.",
+        persisted: false,
+        storage: "manual-config-or-env",
+      });
+      writeHtml(res, 400, renderHtml("Spotify OAuth failed", "Missing authorization code."));
+      stopFlow(flow);
       return;
     }
 
@@ -102,70 +134,84 @@ export async function startSpotifyOauthFlow(
         auth.codeVerifier,
         auth.redirectUri,
       );
-      const persistencePromise: Promise<SpotifyRefreshTokenPersistenceResult> =
-        saveSpotifyRefreshToken(options.api, {
-        refreshToken: token.refreshToken,
-        scope: token.scope,
-      });
-      const persistence = await persistencePromise;
-
-      completedFlow = {
-        completedAt: new Date().toISOString(),
-        error: persistence.error,
+      if (activeFlow !== flow) {
+        writeHtml(res, 409, renderHtml("Spotify OAuth unavailable", "This login is no longer active."));
+        return;
+      }
+      persistenceInFlight = true;
+      let persistence: SpotifyRefreshTokenPersistenceResult;
+      try {
+        persistence = await saveSpotifyRefreshToken(options.api, {
+          refreshToken: token.refreshToken,
+          scope: token.scope,
+        });
+      } finally {
+        persistenceInFlight = false;
+      }
+      if (activeFlow !== flow) {
+        writeHtml(res, 409, renderHtml("Spotify OAuth unavailable", "This login is no longer active."));
+        return;
+      }
+      const error = persistence.persisted
+        ? undefined
+        : "Spotify refresh token could not be saved to OpenClaw.";
+      completeFlow(flow, {
+        error,
         persisted: persistence.persisted,
         scope: token.scope,
         storage: persistence.storage,
-      };
-
+      });
       writeHtml(
         res,
-        200,
+        persistence.persisted ? 200 : 500,
         renderHtml(
-          "Spotify OAuth complete",
+          persistence.persisted ? "Spotify OAuth complete" : "Spotify OAuth failed",
           getCompletionMessage(persistence),
         ),
       );
-    } catch (error_) {
-      writeHtml(
-        res,
-        500,
-        renderHtml(
-          "Spotify OAuth failed",
-          error_ instanceof Error ? error_.message : String(error_),
-        ),
-      );
+    } catch {
+      completeFlow(flow, {
+        error: "Spotify authorization code exchange failed.",
+        persisted: false,
+        storage: "manual-config-or-env",
+      });
+      writeHtml(res, 500, renderHtml("Spotify OAuth failed", "Spotify authorization code exchange failed."));
     } finally {
-      stopActiveFlow();
+      stopFlow(flow);
     }
   });
+  flow.server = server;
 
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(Number(redirectUrl.port), redirectUrl.hostname, () => {
-      server.off("error", reject);
-      resolve();
+  pendingListener = flow;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(getRedirectPort(redirectUrl), getBindHost(redirectUrl), () => {
+        server.off("error", reject);
+        resolve();
+      });
     });
-  });
+  } catch (error) {
+    server.close();
+    throw error;
+  } finally {
+    if (pendingListener === flow) pendingListener = undefined;
+  }
 
-  activeFlow = {
-    server,
-    state,
-    timeout: setTimeout(stopActiveFlow, timeoutMs),
-  };
+  if (startingFlowId !== flowId) {
+    server.close();
+    throw new Error("Spotify OAuth login was superseded before it could start.");
+  }
+  activeFlow = flow;
+  flow.timeout = setTimeout(() => stopFlow(flow), timeoutMs);
 
   return {
     authorizationUrl: auth.authorizationUrl,
     callbackUrl: auth.redirectUri,
     expiresAt: new Date(Date.now() + timeoutMs).toISOString(),
     persistence: canPersistSpotifyRefreshToken(options.api)
-      ? {
-          enabled: true,
-          storage: getSpotifyRefreshTokenPersistenceTarget(options.api),
-        }
-      : {
-          enabled: false,
-          storage: "manual-config-or-env",
-        },
+      ? { enabled: true, storage: getSpotifyRefreshTokenPersistenceTarget(options.api) }
+      : { enabled: false, storage: "manual-config-or-env" },
     scopes: auth.scopes,
   };
 }
@@ -173,102 +219,104 @@ export async function startSpotifyOauthFlow(
 export async function waitForSpotifyOauthFlowCompletion(
   timeoutSeconds = 300,
 ): Promise<CompletedOauthFlow> {
+  const flowId = activeFlow?.id ?? completedFlow?.flowId;
   const deadline = Date.now() + clampTimeoutSeconds(timeoutSeconds) * 1000;
-
-  while (Date.now() < deadline) {
-    if (completedFlow) {
+  while (true) {
+    if (flowId !== undefined && completedFlow?.flowId === flowId) {
       return completedFlow;
     }
-
-    if (!activeFlow) {
-      break;
+    if (flowId !== undefined && startingFlowId !== flowId) {
+      throw new Error("Spotify OAuth login was superseded before the callback finished.");
     }
-
-    await sleep(500);
+    if (!activeFlow || Date.now() >= deadline) break;
+    await sleep(Math.min(500, deadline - Date.now()));
   }
-
   throw new Error("Spotify OAuth login timed out before the callback finished.");
 }
 
-function stopActiveFlow(): void {
-  if (!activeFlow) {
-    return;
+function completeFlow(
+  flow: ActiveOauthFlow,
+  completed: Omit<CompletedOauthFlow, "completedAt" | "flowId">,
+): void {
+  if (activeFlow === flow) {
+    completedFlow = { completedAt: new Date().toISOString(), ...completed, flowId: flow.id };
   }
+}
 
-  clearTimeout(activeFlow.timeout);
-  activeFlow.server.close();
-  activeFlow = undefined;
+function stopActiveFlow(): void {
+  if (activeFlow) stopFlow(activeFlow);
+}
+
+function stopFlow(flow: ActiveOauthFlow): void {
+  if (flow.timeout) clearTimeout(flow.timeout);
+  flow.server.close();
+  if (activeFlow === flow) activeFlow = undefined;
+}
+
+function validateLoopbackRedirectUri(value: string): URL {
+  let redirectUrl: URL;
+  try {
+    redirectUrl = new URL(value);
+  } catch {
+    throw new Error("Spotify OAuth redirect URI must be a valid http://127.0.0.1 or http://[::1] URL.");
+  }
+  if (redirectUrl.protocol !== "http:") {
+    throw new Error("Spotify OAuth callback helper only supports HTTP loopback redirect URIs.");
+  }
+  if (redirectUrl.hostname !== "127.0.0.1" && redirectUrl.hostname !== "[::1]") {
+    throw new Error("Spotify OAuth callback redirect URI must use the explicit loopback IP 127.0.0.1 or [::1], not localhost.");
+  }
+  if (redirectUrl.username || redirectUrl.password || redirectUrl.search || redirectUrl.hash) {
+    throw new Error("Spotify OAuth callback redirect URI cannot include credentials, a query string, or a fragment.");
+  }
+  if (redirectUrl.port === "0") {
+    throw new Error("Spotify OAuth callback redirect URI cannot use port 0; configure a fixed callback port.");
+  }
+  return redirectUrl;
+}
+
+function getRedirectPort(redirectUrl: URL): number {
+  return redirectUrl.port === "" ? 80 : Number(redirectUrl.port);
+}
+
+function getBindHost(redirectUrl: URL): string {
+  return redirectUrl.hostname === "[::1]" ? "::1" : redirectUrl.hostname;
 }
 
 function clampTimeoutSeconds(value: number | undefined): number {
-  if (value === undefined) {
-    return 300;
-  }
-
+  if (value === undefined) return 300;
   if (!Number.isInteger(value) || value < 30 || value > 900) {
     throw new Error("Spotify OAuth timeout must be an integer from 30 to 900.");
   }
-
   return value;
 }
 
-function isLocalhost(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1";
-}
-
-function writeText(
-  res: ServerResponse,
-  statusCode: number,
-  text: string,
-): void {
+function writeText(res: ServerResponse, statusCode: number, text: string): void {
   res.writeHead(statusCode, { "Content-Type": "text/plain; charset=utf-8" });
   res.end(text);
 }
 
-function writeHtml(
-  res: ServerResponse,
-  statusCode: number,
-  html: string,
-): void {
+function writeHtml(res: ServerResponse, statusCode: number, html: string): void {
   res.writeHead(statusCode, { "Content-Type": "text/html; charset=utf-8" });
   res.end(html);
 }
 
-function renderHtml(
-  title: string,
-  message: string,
-  refreshToken?: string,
-): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p>${
-    refreshToken
-      ? `<textarea rows="6" cols="90" readonly>${escapeHtml(refreshToken)}</textarea>`
-      : ""
-  }</body></html>`;
+function renderHtml(title: string, message: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></body></html>`;
 }
 
-function getCompletionMessage(
-  persistence: SpotifyRefreshTokenPersistenceResult,
-): string {
+function getCompletionMessage(persistence: SpotifyRefreshTokenPersistenceResult): string {
   if (persistence.storage === "openclaw-config" && persistence.persisted) {
     return "Refresh token saved to OpenClaw config. You can close this page.";
   }
-
-  if (
-    persistence.storage === "openclaw-plugin-state" &&
-    persistence.persisted
-  ) {
+  if (persistence.storage === "openclaw-plugin-state" && persistence.persisted) {
     return "Refresh token saved to OpenClaw plugin state. You can close this page.";
   }
-
-  const reason = persistence.error ? ` Reason: ${persistence.error}` : "";
-
-  return `Automatic token save failed, so no token was displayed. Fix OpenClaw config write access and run the Spotify OAuth login command again.${reason}`;
+  return "Automatic token save failed, so no token was displayed. Fix OpenClaw config write access and run the Spotify OAuth login command again.";
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function escapeHtml(value: string): string {

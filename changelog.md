@@ -4,6 +4,18 @@ Changes are reconstructed from version changes in `package.json` and the Git
 history on `main`. Dates reflect those version changes, rather than independently
 verified registry publication dates. Each version links to its relevant commits.
 
+## Unreleased
+
+- Accept IDs, URIs, share links, localized links, and embed links in track, artist,
+  and album lookups. Share localized-link support with playlist and playback tools.
+- Coalesce concurrent token requests, including refresh-token rotation and
+  persistence, and allow a new attempt after a failed token request.
+- Report OAuth cancellation and callback failures accurately, validate loopback
+  redirect settings, and guard callback processing and cleanup against races.
+- Match advertised pagination defaults to execution, expose only supported
+  add/remove playlist options, and mark manual refresh tokens as sensitive.
+- Add setup, playback, and recovery guidance and regression coverage for these flows.
+
 ## [0.1.11] - 2026-10-30
 
 - Prepare a new package version after the `0.1.10` ClawHub publication attempt

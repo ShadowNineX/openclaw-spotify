@@ -205,13 +205,20 @@ let cachedClient:
 let cachedUserClient:
   | {
       cacheKey: string;
+      credentialsKey: string;
       client: SpotifyClient;
+      tokenProvider: SpotifyRefreshTokenAuthProvider;
       api: SpotifyRuntimeApi | undefined;
     }
   | undefined;
 const lastSavedRefreshTokensByRuntime = new WeakMap<
   SpotifyRuntimeApi,
   string
+>();
+const tokenVersionsByRuntime = new WeakMap<SpotifyRuntimeApi, number>();
+const pendingTokenWritesByRuntime = new WeakMap<
+  SpotifyRuntimeApi,
+  Promise<SpotifyRefreshTokenPersistenceResult>
 >();
 
 export const SPOTIFY_PLAYLIST_SCOPES = [
@@ -261,30 +268,45 @@ export async function getSpotifyUserClient(
 ): Promise<SpotifyClient> {
   const credentials = resolveSpotifyCredentials(config);
   const refreshTokens = await resolveSpotifyRefreshTokenCandidates(config, api);
+  const credentialsKey = `${credentials.clientId}:${credentials.clientSecret}`;
   const cacheKey = [
     credentials.clientId,
     credentials.clientSecret,
     ...refreshTokens.map((token) => `${token.source}:${token.refreshToken}`),
   ].join(":");
 
-  if (cachedUserClient?.cacheKey === cacheKey && cachedUserClient.api === api) {
+  if (
+    cachedUserClient && cachedUserClient.api === api &&
+    cachedUserClient.credentialsKey === credentialsKey &&
+    (cachedUserClient.cacheKey === cacheKey ||
+      cachedUserClient.tokenProvider.usesRotatedRefreshToken(refreshTokens[0]?.refreshToken))
+  ) {
+    cachedUserClient.tokenProvider.updateRefreshTokenCandidates(refreshTokens);
+    cachedUserClient.cacheKey = cacheKey;
     return cachedUserClient.client;
   }
 
+  let tokenVersion = api ? tokenVersionsByRuntime.get(api) ?? 0 : 0;
   const tokenProvider = new SpotifyRefreshTokenAuthProvider(
     credentials,
     refreshTokens,
     async (
       refreshToken,
     ) => {
-      await saveSpotifyRefreshToken(api, { refreshToken });
+      // A new login wins over an older client's in-flight refresh. Rotation
+      // keeps this provider (and its valid access token) cached for later tools.
+      if (api) {
+        if ((tokenVersionsByRuntime.get(api) ?? 0) !== tokenVersion) return;
+        tokenVersion = rememberSpotifyRefreshToken(api, refreshToken);
+      }
+      await persistSpotifyRefreshToken(api, { refreshToken });
     },
   );
   const client = createSpotifyClient({
     getAccessToken: () => tokenProvider.getAccessToken(),
   });
 
-  cachedUserClient = { cacheKey, client, api };
+  cachedUserClient = { cacheKey, credentialsKey, client, tokenProvider, api };
   return client;
 }
 
@@ -316,10 +338,43 @@ export async function saveSpotifyRefreshToken(
   token: Omit<SpotifyOAuthTokenRecord, "savedAt">,
 ): Promise<SpotifyRefreshTokenPersistenceResult> {
   if (api) {
-    lastSavedRefreshTokensByRuntime.set(api, token.refreshToken);
+    rememberSpotifyRefreshToken(api, token.refreshToken);
   }
   cachedUserClient = undefined;
 
+  return persistSpotifyRefreshToken(api, token);
+}
+
+function rememberSpotifyRefreshToken(api: SpotifyRuntimeApi, refreshToken: string): number {
+  const version = (tokenVersionsByRuntime.get(api) ?? 0) + 1;
+  tokenVersionsByRuntime.set(api, version);
+  lastSavedRefreshTokensByRuntime.set(api, refreshToken);
+  return version;
+}
+
+async function persistSpotifyRefreshToken(
+  api: SpotifyRuntimeApi | undefined,
+  token: Omit<SpotifyOAuthTokenRecord, "savedAt">,
+): Promise<SpotifyRefreshTokenPersistenceResult> {
+  // Preserve write order when a login and automatic rotation overlap. The
+  // newest token must also be the final value on disk, not only in memory.
+  const previous = api ? pendingTokenWritesByRuntime.get(api) : undefined;
+  const commit = () => persistSpotifyRefreshTokenNow(api, token);
+  const pending = previous ? previous.then(commit, commit) : commit();
+  if (api) pendingTokenWritesByRuntime.set(api, pending);
+  try {
+    return await pending;
+  } finally {
+    if (api && pendingTokenWritesByRuntime.get(api) === pending) {
+      pendingTokenWritesByRuntime.delete(api);
+    }
+  }
+}
+
+async function persistSpotifyRefreshTokenNow(
+  api: SpotifyRuntimeApi | undefined,
+  token: Omit<SpotifyOAuthTokenRecord, "savedAt">,
+): Promise<SpotifyRefreshTokenPersistenceResult> {
   const configResult = await saveSpotifyRefreshTokenToConfig(api, token);
 
   if (configResult.persisted) {
@@ -572,6 +627,29 @@ export function normalizeSpotifyContextUri(value: string): string {
   }
 
   throw new Error(`Invalid Spotify context URI or URL: ${value}`);
+}
+
+/** Normalize a catalog reference without accidentally looking up another kind. */
+export function normalizeSpotifyCatalogId(
+  value: string,
+  type: "track" | "artist" | "album",
+): string {
+  const trimmed = value.trim();
+  const uriMatch = new RegExp(`^spotify:${type}:([A-Za-z0-9]+)$`).exec(trimmed);
+  if (uriMatch?.[1]) {
+    return uriMatch[1];
+  }
+
+  const url = parseSpotifyUrl(trimmed);
+  if (url?.type === type) {
+    return url.id;
+  }
+
+  if (/^[A-Za-z0-9]+$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  throw new Error(`Invalid Spotify ${type} ID, URI, or URL: ${value}`);
 }
 
 /** Accept the playlist formats people commonly paste into chat and API calls. */
@@ -881,6 +959,7 @@ function resolveSpotifyCredentials(
 
 class SpotifyClientCredentialsAuthProvider {
   private accessToken: SpotifyAccessToken | null = null;
+  private pendingAccessToken: Promise<string> | undefined;
 
   constructor(private readonly credentials: SpotifyCredentials) {}
 
@@ -889,6 +968,13 @@ class SpotifyClientCredentialsAuthProvider {
       return this.accessToken.access_token;
     }
 
+    this.pendingAccessToken ??= this.requestAccessToken().finally(() => {
+      this.pendingAccessToken = undefined;
+    });
+    return this.pendingAccessToken;
+  }
+
+  private async requestAccessToken(): Promise<string> {
     const token = await clientCredentialsToken({
       clientId: this.credentials.clientId,
       clientSecret: this.credentials.clientSecret,
@@ -914,6 +1000,8 @@ class SpotifyClientCredentialsAuthProvider {
 
 class SpotifyRefreshTokenAuthProvider {
   private accessToken: SpotifyAccessToken | null = null;
+  private pendingAccessToken: Promise<string> | undefined;
+  private rotatedRefreshToken: string | undefined;
   private refreshTokens: SpotifyRefreshTokenCandidate[];
 
   constructor(
@@ -926,11 +1014,31 @@ class SpotifyRefreshTokenAuthProvider {
     this.refreshTokens = [...refreshTokens];
   }
 
+  usesRotatedRefreshToken(refreshToken: string | undefined): boolean {
+    return refreshToken !== undefined && refreshToken === this.rotatedRefreshToken;
+  }
+
+  updateRefreshTokenCandidates(candidates: readonly SpotifyRefreshTokenCandidate[]): void {
+    this.refreshTokens = dedupeRefreshTokenCandidates([
+      { refreshToken: this.rotatedRefreshToken, source: "last-oauth-login" },
+      ...candidates,
+    ]);
+  }
+
   async getAccessToken(): Promise<string> {
     if (this.accessToken && this.accessToken.expires > Date.now() + 60_000) {
       return this.accessToken.access_token;
     }
 
+    // Concurrent tools must share refresh and persistence: a rotated token may
+    // invalidate the previous one before a second refresh request reaches Spotify.
+    this.pendingAccessToken ??= this.requestAccessToken().finally(() => {
+      this.pendingAccessToken = undefined;
+    });
+    return this.pendingAccessToken;
+  }
+
+  private async requestAccessToken(): Promise<string> {
     this.accessToken = await refreshSpotifyAccessTokenFromCandidates(
       this.credentials,
       this.refreshTokens,
@@ -941,13 +1049,8 @@ class SpotifyRefreshTokenAuthProvider {
   }
 
   private async handleRefreshTokenRotated(refreshToken: string): Promise<void> {
-    this.refreshTokens = dedupeRefreshTokenCandidates([
-      {
-        refreshToken,
-        source: "last-oauth-login",
-      },
-      ...this.refreshTokens,
-    ]);
+    this.rotatedRefreshToken = refreshToken;
+    this.updateRefreshTokenCandidates(this.refreshTokens);
 
     await this.onRefreshTokenRotated?.(refreshToken);
   }
@@ -1300,13 +1403,24 @@ function parseSpotifyUrl(
     return undefined;
   }
 
-  if (url.hostname !== "open.spotify.com") {
+  if (
+    (url.protocol !== "https:" && url.protocol !== "http:") ||
+    url.hostname !== "open.spotify.com" ||
+    url.username || url.password || url.port
+  ) {
     return undefined;
   }
 
-  const [type, id] = url.pathname.split("/").filter(Boolean);
+  const segments = url.pathname.split("/").filter(Boolean);
+  if (/^intl-[a-z]{2}(?:-[a-z]{2})?$/i.test(segments[0] ?? "")) {
+    segments.shift();
+  }
+  if (segments[0] === "embed") {
+    segments.shift();
+  }
+  const [type, id] = segments;
 
-  if (!type || !id || !/^[A-Za-z0-9]+$/.test(id)) {
+  if (segments.length !== 2 || !type || !id || !/^[A-Za-z0-9]+$/.test(id)) {
     return undefined;
   }
 

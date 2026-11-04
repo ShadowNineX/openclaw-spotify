@@ -13,6 +13,8 @@ const limitSchema = Type.Integer({
   default: 10,
 });
 
+const pageLimitSchema = Type.Integer({ ...limitSchema, default: 20 });
+
 const offsetSchema = Type.Integer({
   description: "Zero-based result offset.",
   minimum: 0,
@@ -49,7 +51,7 @@ export const searchSchema = Type.Object(
 export const idSchema = Type.Object(
   {
     id: Type.String({
-      description: "Spotify catalog ID.",
+      description: "Spotify track ID, URI, or open.spotify.com URL.",
       minLength: 1,
     }),
     market: Type.Optional(marketSchema),
@@ -60,7 +62,7 @@ export const idSchema = Type.Object(
 export const artistSchema = Type.Object(
   {
     id: Type.String({
-      description: "Spotify artist ID.",
+      description: "Spotify artist ID, URI, or open.spotify.com URL.",
       minLength: 1,
     }),
     includeTopTracks: Type.Optional(
@@ -77,7 +79,7 @@ export const artistSchema = Type.Object(
 export const albumSchema = Type.Object(
   {
     id: Type.String({
-      description: "Spotify album ID.",
+      description: "Spotify album ID, URI, or open.spotify.com URL.",
       minLength: 1,
     }),
     includeTracks: Type.Optional(
@@ -87,7 +89,7 @@ export const albumSchema = Type.Object(
       }),
     ),
     market: Type.Optional(marketSchema),
-    limit: Type.Optional(limitSchema),
+    limit: Type.Optional(pageLimitSchema),
     offset: Type.Optional(offsetSchema),
   },
   { additionalProperties: false },
@@ -100,7 +102,7 @@ export const playlistSchema = Type.Object(
       minLength: 1,
     }),
     market: Type.Optional(marketSchema),
-    limit: Type.Optional(limitSchema),
+    limit: Type.Optional(pageLimitSchema),
     offset: Type.Optional(offsetSchema),
   },
   { additionalProperties: false },
@@ -108,7 +110,7 @@ export const playlistSchema = Type.Object(
 
 export const myPlaylistsSchema = Type.Object(
   {
-    limit: Type.Optional(limitSchema),
+    limit: Type.Optional(pageLimitSchema),
     offset: Type.Optional(offsetSchema),
   },
   { additionalProperties: false },
@@ -238,7 +240,7 @@ export const deletePlaylistSchema = Type.Object(
   { additionalProperties: false },
 );
 
-export const playlistTracksEditSchema = Type.Object(
+const playlistTracksEditSchema = Type.Object(
   {
     id: Type.String({
       description: "Spotify playlist ID, URI, or open.spotify.com URL.",
@@ -246,7 +248,7 @@ export const playlistTracksEditSchema = Type.Object(
     }),
     uris: Type.Array(
       Type.String({
-        description: "Spotify track URI or track ID.",
+        description: "Spotify track ID, URI, or open.spotify.com URL.",
         minLength: 1,
       }),
       {
@@ -269,6 +271,13 @@ export const playlistTracksEditSchema = Type.Object(
     ),
   },
   { additionalProperties: false },
+);
+
+export const addPlaylistTracksSchema = Type.Omit(
+  playlistTracksEditSchema, ["snapshotId"], { additionalProperties: false },
+);
+export const removePlaylistTracksSchema = Type.Omit(
+  playlistTracksEditSchema, ["position"], { additionalProperties: false },
 );
 
 export const reorderPlaylistTracksSchema = Type.Object(

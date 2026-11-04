@@ -18,8 +18,8 @@ Use these tools for Spotify catalog lookup, the authorized user's playlists, and
 - Control playback: `spotify_transfer_playback`, `spotify_play`, `spotify_pause`, `spotify_next`, `spotify_previous`, `spotify_seek`, `spotify_set_repeat`, `spotify_set_volume`, `spotify_set_shuffle`, or `spotify_add_to_queue`.
 
 Prefer IDs, URIs, or URLs returned by Spotify tools instead of guessing
-identifiers. Playlist tools accept a playlist ID, Spotify URI, or copied Spotify
-URL. Mutation results include a human-readable playlist name and link when
+identifiers. Catalog and playlist tools accept the matching item ID, Spotify URI,
+or copied Spotify URL, including localized and embed links. Mutation results include a human-readable playlist name and link when
 Spotify makes that metadata available. For online cover art, pass `imageUrl`;
 the cover tool prepares Spotify-compatible JPEG artwork.
 
@@ -31,6 +31,15 @@ the cover tool prepares Spotify-compatible JPEG artwork.
 - Each playlist entry has an absolute zero-based `position`. Use that value for reordering instead of numbering the current page from zero. Preserve duplicate entries and unavailable slots; do not shift later positions by filtering them out.
 - `unavailable: true` means Spotify could not provide that entry. Do not invent its name or URI. Check `type` to distinguish songs from episodes; the track-edit tools accept tracks.
 - Use `playlist.snapshotId` as `snapshotId` for guarded removals or reorders. After a successful edit, use its returned `snapshotId` for follow-up guarded calls. Re-read the playlist when the next edit depends on changed positions or contents.
+- Search defaults to 10 results per type; album tracks, playlist tracks, and the user's playlists default to 20. Keep `limit` consistent while paging.
+- Track additions support `position`; track removals support `snapshotId`. Do not supply a snapshot guard to additions or an insertion position to removals.
+
+## Playback
+
+- Check playback and devices before choosing a target. If there are no devices, ask the user to open Spotify on the device they want to use; an empty list is not a successful playback action.
+- Use a returned `deviceId` when selecting a device. Avoid guessing which of several devices the user intends.
+- Starting playback requires Spotify Premium. If Spotify refuses a control action, explain the reported account, device, or permission problem instead of repeatedly submitting it.
+- Send dependent playback actions sequentially, and check `spotify_get_playback` when confirmation matters. Never claim playback changed after a failed request.
 
 ## Playlist visibility is not privacy
 

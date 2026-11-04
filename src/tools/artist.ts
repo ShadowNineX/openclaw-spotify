@@ -1,5 +1,6 @@
 import {
   getSpotifyClient,
+  normalizeSpotifyCatalogId,
   resolveSpotifyMarket,
   summarizeArtist,
   summarizeTrack,
@@ -12,14 +13,15 @@ export function defineArtistTool(tool: SpotifyToolFactory): SpotifyTool {
     name: "spotify_get_artist",
     label: "Spotify Artist",
     description:
-      "Get Spotify catalog metadata for an artist by Spotify artist ID.",
+      "Get Spotify catalog metadata for an artist by ID, URI, or Spotify URL.",
     parameters: artistSchema,
     async execute(params, config) {
+      const id = normalizeSpotifyCatalogId(params.id, "artist");
       const client = getSpotifyClient(config);
-      const artist = await client.artists.get(params.id);
+      const artist = await client.artists.get(id);
       const includeTopTracks = params.includeTopTracks !== false;
       const topTracks = includeTopTracks
-        ? await client.artists.getTopTracks(params.id, {
+        ? await client.artists.getTopTracks(id, {
             market: resolveSpotifyMarket(params.market, config) ?? "US",
           })
         : undefined;

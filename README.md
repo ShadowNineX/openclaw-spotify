@@ -1,20 +1,28 @@
 # openclaw-spotify
 
-Plain OpenClaw plugin for Spotify catalog integrations.
+Search Spotify, inspect tracks and albums, manage playlists, and control Spotify
+Connect playback from OpenClaw.
 
 See the [changelog](changelog.md) for version history.
 
 Requires OpenClaw **2026.6.11 or newer**. The SDK used for development can be
 newer without requiring users to upgrade to the latest gateway.
 
-## Files
+## Getting started
 
-- `openclaw.plugin.json` declares the plugin manifest OpenClaw discovers.
-- `index.ts` exports the tool plugin entrypoint with `defineToolPlugin`.
-- `src/index.ts` keeps the shared plugin identity and config schema.
-- `src/tools/` declares the OpenClaw tools.
-- `src/spotify.ts` wraps the Spotify SDK and response shaping.
-- `skills/spotify/SKILL.md` teaches OpenClaw when and how to use the tools.
+1. Enable the plugin and configure your Spotify app's client ID and secret using
+   the config below. Catalog search and track, artist, and album lookups are ready
+   after this step.
+2. For playlists and playback, register `http://127.0.0.1:4377/callback` in your
+   Spotify app's redirect URIs, then run `openclaw spotify auth login` on the
+   OpenClaw host. Follow the URL printed by the command and wait for confirmation
+   that the token was saved.
+3. Try asking OpenClaw: “Find this album” with a Spotify link, “Show my playlists,”
+   or “What's playing?”
+
+To start playback, open Spotify on the device you want to use. The Web API's
+playback controls require a Premium account; see
+[Spotify's playback requirements](https://developer.spotify.com/documentation/web-api/reference/start-a-users-playback).
 
 ## Config
 
@@ -71,12 +79,17 @@ ssh -L 4377:127.0.0.1:4377 user@your-vps
 The command prints the Spotify authorization URL, waits for the callback, and
 saves the refresh token into OpenClaw config. It does not expose the refresh
 token in chat or on the callback page. Set `redirectUri` or
-`SPOTIFY_REDIRECT_URI` only if you want to use a different localhost callback.
+`SPOTIFY_REDIRECT_URI` only if you want to use a different HTTP loopback callback.
+Use an explicit loopback IP such as `127.0.0.1` or `[::1]`; Spotify does not accept
+`localhost`. The CLI prints a port-forward command matching your callback.
+See [Spotify's redirect URI requirements](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).
 Tokens saved by `openclaw spotify auth login` are preferred over manual
 `refreshToken` or `SPOTIFY_REFRESH_TOKEN` values. If Spotify reports a saved
 token as revoked, the plugin tries the next configured token source before
 failing. When Spotify rotates a refresh token during an API token refresh, the
 plugin saves the replacement token back to OpenClaw automatically.
+Concurrent requests share a pending token refresh and wait for rotated-token
+persistence before sending their Spotify requests.
 
 Plugin-state token storage uses awaited async operations, preferring OpenClaw's
 V2 keyed store when available. Older supported gateways use the async keyed
@@ -84,9 +97,11 @@ store with the same namespace and key, preserving existing saved logins.
 
 ## Tools
 
-Playlist inputs accept a Spotify ID, a `spotify:playlist:...` URI, or an
-`open.spotify.com/playlist/...` URL, so links copied from Spotify can be pasted
-directly. Playlist mutation results include the playlist's display name, URI,
+Track, artist, album, and playlist lookups accept the matching Spotify ID, URI,
+or `open.spotify.com` URL. Localized links (such as `/intl-de/track/...`) and embed
+links work too. Playback and playlist track edits also accept matching copied
+links. A link to the wrong item type is rejected before a catalog request.
+Playlist mutation results include the playlist's display name, URI,
 and clickable URL (while retaining its ID for follow-up tool calls). If Spotify
 temporarily refuses the metadata lookup, the write can still proceed and the
 result falls back to the normalized ID and stable Spotify links.
@@ -145,7 +160,9 @@ loaded, the prompt says so and asks you to check the link before approving.
 
 ### Reading playlists
 
-Playlist reads and discovery return one page at a time. `hasMore` and
+Playlist reads and discovery return one page at a time. Search defaults to 10
+results per type; album tracks, playlist tracks, and your playlist list default
+to 20. Set `limit` explicitly to request a different page size. `hasMore` and
 `nextOffset` make the next tool call explicit: repeat the same request with
 `offset: nextOffset` until `hasMore` is false when you need the complete list.
 The existing `next` and `previous` Spotify URLs are also retained.
@@ -158,6 +175,9 @@ positions accurate even when an item cannot be played. Playlist totals support
 both Spotify's current `items` field and older `tracks` responses.
 Add, remove, and reorder results also return the updated `snapshotId` for
 subsequent guarded edits.
+Track additions accept an optional insertion `position`; removals accept an
+optional `snapshotId`. Unsupported options are rejected by the tool schema so
+a snapshot guard or position is never silently promised for the wrong action.
 
 Each protected playlist action is configurable. Set an action to `"allow"` if it
 should run without a plugin approval prompt:
@@ -181,7 +201,32 @@ should run without a plugin approval prompt:
 }
 ```
 
-## Check
+## Troubleshooting
+
+- **Missing or revoked login:** run `openclaw spotify auth login` again on the
+  OpenClaw host. Keep OAuth codes and tokens out of chat.
+- **Login cancelled or failed:** the CLI reports the failure instead of calling
+  it a timeout. Run login again after resolving the reported problem.
+- **Callback never arrives:** check the registered redirect URI and, for a VPS,
+  the SSH forward. Keep the login command running while authorizing.
+- **Token could not be saved:** fix OpenClaw config/state write access and repeat
+  login. The callback page does not expose a token as a workaround.
+- **No playback device:** open Spotify on the target device, list devices with
+  `spotify_list_devices`, then use its returned `deviceId`. Do not guess an ID.
+- **Playback or playlist access refused:** check the Spotify account, app access,
+  playlist edit permissions, and requested OAuth scopes. Log in again after
+  changing permissions. Repeatedly submitting the same write is not a fix.
+
+## Development
+
+- `openclaw.plugin.json` declares the plugin manifest OpenClaw discovers.
+- `index.ts` exports the tool plugin entrypoint with `defineToolPlugin`.
+- `src/index.ts` keeps the shared plugin identity and config schema.
+- `src/tools/` declares the OpenClaw tools.
+- `src/spotify.ts` wraps the Spotify SDK and response shaping.
+- `skills/spotify/SKILL.md` teaches OpenClaw when and how to use the tools.
+
+### Check
 
 Install dependencies:
 

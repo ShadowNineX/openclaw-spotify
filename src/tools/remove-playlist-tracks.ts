@@ -1,5 +1,5 @@
 import { preparePlaylistTrackEdit } from "./playlist-track-edit";
-import { playlistTracksEditSchema } from "./schemas";
+import { removePlaylistTracksSchema } from "./schemas";
 import type { SpotifyTool, SpotifyToolFactory } from "./types";
 
 export function defineRemovePlaylistTracksTool(
@@ -10,7 +10,7 @@ export function defineRemovePlaylistTracksTool(
     label: "Spotify Remove Playlist Tracks",
     description:
       "Remove tracks from one of the authorized user's editable playlists.",
-    parameters: playlistTracksEditSchema,
+    parameters: removePlaylistTracksSchema,
     async execute(params, config, context) {
       const { client, playlist, uris } = await preparePlaylistTrackEdit(
         params,

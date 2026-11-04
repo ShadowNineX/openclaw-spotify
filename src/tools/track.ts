@@ -1,5 +1,6 @@
 import {
   getSpotifyClient,
+  normalizeSpotifyCatalogId,
   resolveSpotifyMarket,
   summarizeTrack,
 } from "../spotify";
@@ -11,11 +12,12 @@ export function defineTrackTool(tool: SpotifyToolFactory): SpotifyTool {
     name: "spotify_get_track",
     label: "Spotify Track",
     description:
-      "Get Spotify catalog metadata for a track by Spotify track ID.",
+      "Get Spotify catalog metadata for a track by ID, URI, or Spotify URL.",
     parameters: idSchema,
     async execute(params, config) {
+      const id = normalizeSpotifyCatalogId(params.id, "track");
       const client = getSpotifyClient(config);
-      const track = await client.tracks.get(params.id, {
+      const track = await client.tracks.get(id, {
         market: resolveSpotifyMarket(params.market, config),
       });
 

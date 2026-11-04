@@ -9,7 +9,7 @@ import {
 } from "./spotify";
 import {
   deletePlaylistSchema,
-  playlistTracksEditSchema,
+  removePlaylistTracksSchema,
   reorderPlaylistTracksSchema,
   updatePlaylistSchema,
 } from "./tools/schemas";
@@ -74,12 +74,12 @@ const UPDATE_PLAYLIST_POLICY = {
 
 const REMOVE_PLAYLIST_TRACKS_POLICY = {
   action: "removeTracks",
-  schema: playlistTracksEditSchema,
+  schema: removePlaylistTracksSchema,
   title: "Remove tracks from Spotify playlist",
   severity: "critical",
   describe: (params, playlistLabel) =>
     `Remove ${params.uris.length} ${params.uris.length === 1 ? "track" : "tracks"} from playlist ${playlistLabel}.`,
-} satisfies SpotifyApprovalPolicy<typeof playlistTracksEditSchema>;
+} satisfies SpotifyApprovalPolicy<typeof removePlaylistTracksSchema>;
 
 const REORDER_PLAYLIST_TRACKS_POLICY = {
   action: "reorderTracks",

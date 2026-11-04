@@ -70,7 +70,7 @@ async function runSpotifyAuthLogin(
   console.log(
     "If OpenClaw is running on a VPS, make sure this port forward exists from your local machine:",
   );
-  console.log("  ssh -L 4377:127.0.0.1:4377 user@your-vps");
+  console.log(`  ${getSshTunnelExample(flow.callbackUrl)}`);
   console.log("");
   console.log("Then open this authorization URL in your local browser:");
   console.log(flow.authorizationUrl);
@@ -79,15 +79,25 @@ async function runSpotifyAuthLogin(
 
   const completed = await waitForSpotifyOauthFlowCompletion(timeoutSeconds);
 
+  if (completed.error) {
+    throw new Error(completed.error);
+  }
+
   if (!completed.persisted) {
     throw new Error(
-      `Spotify OAuth completed, but the refresh token could not be saved to OpenClaw: ${completed.error ?? "unknown error"}`,
+      "Spotify OAuth completed, but the refresh token could not be saved to OpenClaw.",
     );
   }
 
   console.log(
     `Spotify OAuth complete. Refresh token saved via ${completed.storage}.`,
   );
+}
+
+function getSshTunnelExample(callbackUrl: string): string {
+  const callback = new URL(callbackUrl);
+  const port = callback.port || "80";
+  return `ssh -L ${port}:${callback.hostname}:${port} user@your-vps`;
 }
 
 function resolveSpotifyPluginConfig(

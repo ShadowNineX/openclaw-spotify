@@ -1,5 +1,5 @@
 import { preparePlaylistTrackEdit } from "./playlist-track-edit";
-import { playlistTracksEditSchema } from "./schemas";
+import { addPlaylistTracksSchema } from "./schemas";
 import type { SpotifyTool, SpotifyToolFactory } from "./types";
 
 export function defineAddPlaylistTracksTool(
@@ -9,7 +9,7 @@ export function defineAddPlaylistTracksTool(
     name: "spotify_add_playlist_tracks",
     label: "Spotify Add Playlist Tracks",
     description: "Add tracks to one of the authorized user's editable playlists.",
-    parameters: playlistTracksEditSchema,
+    parameters: addPlaylistTracksSchema,
     async execute(params, config, context) {
       const { client, playlist, uris } = await preparePlaylistTrackEdit(
         params,

@@ -97,6 +97,13 @@
       "label": "Spotify client secret",
       "sensitive": true
     },
+    "refreshToken": {
+      "label": "Spotify refresh token",
+      "sensitive": true
+    },
+    "redirectUri": {
+      "label": "OAuth callback URL"
+    },
     "market": {
       "label": "Default market"
     }
